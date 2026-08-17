@@ -65,3 +65,9 @@ button {
 .focus-ring:focus-visible {
   box-shadow: var(--habibi-focus-ring);
 }
+
+@layer components {
+  .field-control {
+    @apply focus-ring w-full rounded-habibiMd border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 shadow-habibiXs outline-none placeholder:text-gray-400;
+  }
+}

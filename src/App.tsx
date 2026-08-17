@@ -9,6 +9,7 @@ import {
   Clock3,
   Database,
   Download,
+  Edit3,
   Eye,
   FileText,
   FolderKanban,
@@ -16,7 +17,6 @@ import {
   GitBranch,
   HelpCircle,
   LayoutDashboard,
-  LineChart,
   Lock,
   MessageSquareText,
   MonitorDot,
@@ -24,6 +24,8 @@ import {
   PanelRightOpen,
   Plus,
   RefreshCw,
+  RotateCcw,
+  Save,
   Search,
   Send,
   Settings,
@@ -39,6 +41,8 @@ type ViewId = "inbox" | "project" | "transcript" | "team" | "reports" | "admin";
 type CategoryId = "ux" | "frontend" | "backend" | "data";
 type DiagramId = "ui" | "architecture" | "pipeline";
 type Tone = "brand" | "success" | "warning" | "error" | "info" | "neutral";
+type ProjectStatus = "Kickoff review" | "In discovery" | "Blocked" | "Ready for approval";
+type Feasibility = "Green" | "Yellow" | "Red";
 
 type NavItem = {
   id: ViewId;
@@ -49,7 +53,7 @@ type NavItem = {
 
 type TeamMember = {
   assets: string[];
-  capacity: string;
+  capacity: number;
   focus: string;
   initials: string;
   name: string;
@@ -79,181 +83,65 @@ type ReportAsset = {
   tone: Tone;
 };
 
+type TranscriptEvent = {
+  actor: string;
+  content: string;
+  marker: string;
+  time: string;
+};
+
+type ActionItem = {
+  label: string;
+  meta: string;
+  tone: Tone;
+};
+
+type CapabilityRow = {
+  capability: string;
+  coverage: "Covered" | "Needs review" | "Blocked";
+  evidence: string;
+  owner: string;
+};
+
+type CategoryReview = {
+  evidence: string;
+  state: string;
+  tone: Tone;
+};
+
+type Project = {
+  actionQueue: ActionItem[];
+  botState: string;
+  capabilityRows: CapabilityRow[];
+  categoryReviews: Record<CategoryId, CategoryReview>;
+  diagramNodes: Record<DiagramId, string[]>;
+  feasibility: Feasibility;
+  id: string;
+  lastSynced: string;
+  name: string;
+  openRisks: number;
+  ownerNote: string;
+  questions: Question[];
+  reportAssets: ReportAsset[];
+  shortName: string;
+  status: ProjectStatus;
+  subtitle: string;
+  summary: string;
+  team: TeamMember[];
+  teamPings: number;
+  transcriptCoverage: number;
+  transcriptEvents: TranscriptEvent[];
+};
+
+type ProjectDraft = Partial<Pick<Project, "feasibility" | "lastSynced" | "name" | "ownerNote" | "status" | "summary">>;
+
 const navItems: NavItem[] = [
   { id: "inbox", icon: LayoutDashboard, label: "My inbox", meta: "UX/UI first" },
-  { id: "project", icon: FolderKanban, label: "Project", meta: "Kickoff view" },
+  { id: "project", icon: FolderKanban, label: "Projects", meta: "Switch and edit" },
   { id: "transcript", icon: MessageSquareText, label: "Transcripts", meta: "Calls and chat" },
   { id: "team", icon: Users, label: "Team", meta: "Skills and pings" },
   { id: "reports", icon: FileText, label: "Reports", meta: "Assets by owner" },
   { id: "admin", icon: Settings, label: "Admin", meta: "Bot controls" },
-];
-
-const teamMembers: TeamMember[] = [
-  {
-    assets: ["UI flow diagram", "Screen inventory", "UX risks report"],
-    capacity: "68%",
-    focus: "Screens, flows, accessibility notes, review handoff",
-    initials: "GK",
-    name: "Gurney",
-    pings: 4,
-    role: "UX/UI Front End Designer",
-    status: "Reviewing",
-    tone: "brand",
-  },
-  {
-    assets: ["Stack summary", "Component constraints"],
-    capacity: "74%",
-    focus: "React framework notes, component strategy, build constraints",
-    initials: "FE",
-    name: "Front End Lead",
-    pings: 2,
-    role: "Front End",
-    status: "Clear",
-    tone: "success",
-  },
-  {
-    assets: ["Service map", "Integration risk report"],
-    capacity: "58%",
-    focus: "Services, auth, Teams integration, Graph API permissions",
-    initials: "BE",
-    name: "Back End Lead",
-    pings: 5,
-    role: "Back End / Architecture",
-    status: "Needs ping",
-    tone: "warning",
-  },
-  {
-    assets: ["Data pipeline diagram", "Retention questions"],
-    capacity: "44%",
-    focus: "Transcript storage, data access, retention, source policy",
-    initials: "DA",
-    name: "Data Owner",
-    pings: 3,
-    role: "Data / Databases",
-    status: "Blocked",
-    tone: "error",
-  },
-];
-
-const questions: Question[] = [
-  {
-    askedBy: "Baymax",
-    assignee: "Gurney",
-    category: "UX/UI",
-    question: "Which user flows need to be visible in the first generated diagram?",
-    status: "Asked live",
-    time: "15:42",
-  },
-  {
-    askedBy: "Baymax",
-    assignee: "Data Owner",
-    category: "Data",
-    question: "What retention policy should apply to Teams transcripts and generated reports?",
-    status: "Pending",
-    time: "16:04",
-  },
-  {
-    askedBy: "Front End Lead",
-    assignee: "Baymax",
-    category: "Front end",
-    question: "Ask next kickoff group about supported component library and browser constraints.",
-    status: "Team requested",
-    time: "16:11",
-  },
-  {
-    askedBy: "Baymax",
-    assignee: "Back End Lead",
-    category: "Architecture",
-    question: "Will the Teams bot use Bot Framework events, Graph subscriptions, or both?",
-    status: "Answered",
-    time: "16:18",
-  },
-];
-
-const reportAssets: ReportAsset[] = [
-  {
-    assignee: "Gurney",
-    category: "UX/UI",
-    description: "Screen inventory, primary flows, states, and review notes extracted from kickoff.",
-    evidence: "Transcript markers 15:12, 15:42, 16:09",
-    icon: Paintbrush,
-    status: "Needs designer review",
-    title: "UX/UI kickoff packet",
-    tone: "brand",
-  },
-  {
-    assignee: "Gurney",
-    category: "Visual asset",
-    description: "Editable flow diagram draft for dashboard screens, generated from user needs and screens mentioned.",
-    evidence: "Generated after question Q-014",
-    icon: Workflow,
-    status: "Regenerate available",
-    title: "Project view flow map",
-    tone: "info",
-  },
-  {
-    assignee: "Front End Lead",
-    category: "Front end",
-    description: "Frameworks, components, constraints, and unknowns routed for implementation review.",
-    evidence: "Teams chat plus kickoff transcript",
-    icon: MonitorDot,
-    status: "Ready to approve",
-    title: "Front-end stack summary",
-    tone: "success",
-  },
-  {
-    assignee: "Back End Lead",
-    category: "Architecture",
-    description: "Service boundaries, Teams integration options, Graph API access, and compliance concerns.",
-    evidence: "Open concerns section and call marker 16:18",
-    icon: GitBranch,
-    status: "Risk review",
-    title: "Architecture diagram",
-    tone: "warning",
-  },
-  {
-    assignee: "Data Owner",
-    category: "Data",
-    description: "Data sources, transcript storage, generated report access, and retention gaps.",
-    evidence: "Pending answer from Q-021",
-    icon: Database,
-    status: "Blocked",
-    title: "Data pipeline diagram",
-    tone: "error",
-  },
-];
-
-const transcriptEvents = [
-  {
-    actor: "Project Sponsor",
-    content: "We need the bot to join the Teams kickoff, gather technical context, then leave after the kickoff phase.",
-    marker: "Scope",
-    time: "15:08",
-  },
-  {
-    actor: "Baymax",
-    content: "Should the first dashboard view be role-based, so a UX/UI designer sees assigned design outputs first?",
-    marker: "Question asked",
-    time: "15:42",
-  },
-  {
-    actor: "Gurney",
-    content: "Yes, all the information sent to me should be first, including visuals, reports, and transcript highlights.",
-    marker: "UX/UI",
-    time: "15:45",
-  },
-  {
-    actor: "Baymax",
-    content: "What team capability profile should feasibility flags use: skills, tooling, capacity, or all three?",
-    marker: "Question asked",
-    time: "16:04",
-  },
-  {
-    actor: "Back End Lead",
-    content: "Teams integration needs a separate permissions and data-access decision before any pilot.",
-    marker: "Risk",
-    time: "16:18",
-  },
 ];
 
 const categories: Array<{ id: CategoryId; label: string; output: string; listensFor: string; tone: Tone }> = [
@@ -287,37 +175,649 @@ const categories: Array<{ id: CategoryId; label: string; output: string; listens
   },
 ];
 
+const projects: Project[] = [
+  {
+    actionQueue: [
+      { label: "Review UI flow diagram", meta: "Generated from screens and user needs", tone: "brand" },
+      { label: "Confirm dashboard module order", meta: "Project summary, monitor, diagrams, questions", tone: "warning" },
+      { label: "Approve UX notes for proposal", meta: "Required before final project packet", tone: "success" },
+      { label: "Reply to retention visibility question", meta: "Data owner needs dashboard access expectations", tone: "info" },
+    ],
+    botState: "Listening",
+    capabilityRows: [
+      { capability: "UX/UI flows", coverage: "Covered", evidence: "Current design-library patterns available", owner: "Gurney" },
+      { capability: "Front-end build", coverage: "Covered", evidence: "React/Tailwind stack aligns", owner: "Front End Lead" },
+      { capability: "Teams integration", coverage: "Needs review", evidence: "Bot Framework and Graph path unresolved", owner: "Back End Lead" },
+      { capability: "Data retention", coverage: "Blocked", evidence: "Storage and access policy needed", owner: "Data Owner" },
+    ],
+    categoryReviews: {
+      ux: { evidence: "Transcript markers 15:12, 15:42, 16:09", state: "Ready for designer review", tone: "brand" },
+      frontend: { evidence: "Framework and component constraints captured from kickoff", state: "Ready for owner review", tone: "success" },
+      backend: { evidence: "Teams integration path needs technical decision", state: "Risk review", tone: "warning" },
+      data: { evidence: "Retention answer pending from data owner", state: "Blocked by retention answer", tone: "error" },
+    },
+    diagramNodes: {
+      ui: ["Designer inbox", "Project dashboard", "Transcript markers", "Reports and assets"],
+      architecture: ["Teams call", "Baymax bot", "Intake framework", "Admin dashboard"],
+      pipeline: ["Transcript store", "Structured proposal", "Report assets", "Review archive"],
+    },
+    feasibility: "Yellow",
+    id: "apollo",
+    lastSynced: "Today at 4:26 PM",
+    name: "Project Apollo",
+    openRisks: 2,
+    ownerNote: "Prioritize the designer handoff and make data retention visible before pilot approval.",
+    questions: [
+      {
+        askedBy: "Baymax",
+        assignee: "Gurney",
+        category: "UX/UI",
+        question: "Which user flows need to be visible in the first generated diagram?",
+        status: "Asked live",
+        time: "15:42",
+      },
+      {
+        askedBy: "Baymax",
+        assignee: "Data Owner",
+        category: "Data",
+        question: "What retention policy should apply to Teams transcripts and generated reports?",
+        status: "Pending",
+        time: "16:04",
+      },
+      {
+        askedBy: "Front End Lead",
+        assignee: "Baymax",
+        category: "Front end",
+        question: "Ask next kickoff group about supported component library and browser constraints.",
+        status: "Team requested",
+        time: "16:11",
+      },
+      {
+        askedBy: "Baymax",
+        assignee: "Back End Lead",
+        category: "Architecture",
+        question: "Will the Teams bot use Bot Framework events, Graph subscriptions, or both?",
+        status: "Answered",
+        time: "16:18",
+      },
+    ],
+    reportAssets: [
+      {
+        assignee: "Gurney",
+        category: "UX/UI",
+        description: "Screen inventory, primary flows, states, and review notes extracted from kickoff.",
+        evidence: "Transcript markers 15:12, 15:42, 16:09",
+        icon: Paintbrush,
+        status: "Needs designer review",
+        title: "UX/UI kickoff packet",
+        tone: "brand",
+      },
+      {
+        assignee: "Gurney",
+        category: "Visual asset",
+        description: "Editable flow diagram draft for dashboard screens, generated from user needs and screens mentioned.",
+        evidence: "Generated after question Q-014",
+        icon: Workflow,
+        status: "Regenerate available",
+        title: "Project view flow map",
+        tone: "info",
+      },
+      {
+        assignee: "Front End Lead",
+        category: "Front end",
+        description: "Frameworks, components, constraints, and unknowns routed for implementation review.",
+        evidence: "Teams chat plus kickoff transcript",
+        icon: MonitorDot,
+        status: "Ready to approve",
+        title: "Front-end stack summary",
+        tone: "success",
+      },
+      {
+        assignee: "Back End Lead",
+        category: "Architecture",
+        description: "Service boundaries, Teams integration options, Graph API access, and compliance concerns.",
+        evidence: "Open concerns section and call marker 16:18",
+        icon: GitBranch,
+        status: "Risk review",
+        title: "Architecture diagram",
+        tone: "warning",
+      },
+      {
+        assignee: "Data Owner",
+        category: "Data",
+        description: "Data sources, transcript storage, generated report access, and retention gaps.",
+        evidence: "Pending answer from Q-021",
+        icon: Database,
+        status: "Blocked",
+        title: "Data pipeline diagram",
+        tone: "error",
+      },
+    ],
+    shortName: "Apollo",
+    status: "Kickoff review",
+    subtitle: "Teams kickoff assistant dashboard",
+    summary:
+      "Baymax captured a kickoff-only meeting brief and converted it into a reviewable proposal with technical categories, generated visuals, open questions, and routed team approvals.",
+    team: [
+      {
+        assets: ["UI flow diagram", "Screen inventory", "UX risks report"],
+        capacity: 68,
+        focus: "Screens, flows, accessibility notes, review handoff",
+        initials: "GK",
+        name: "Gurney",
+        pings: 4,
+        role: "UX/UI Front End Designer",
+        status: "Reviewing",
+        tone: "brand",
+      },
+      {
+        assets: ["Stack summary", "Component constraints"],
+        capacity: 74,
+        focus: "React framework notes, component strategy, build constraints",
+        initials: "FE",
+        name: "Front End Lead",
+        pings: 2,
+        role: "Front End",
+        status: "Clear",
+        tone: "success",
+      },
+      {
+        assets: ["Service map", "Integration risk report"],
+        capacity: 58,
+        focus: "Services, auth, Teams integration, Graph API permissions",
+        initials: "BE",
+        name: "Back End Lead",
+        pings: 5,
+        role: "Back End / Architecture",
+        status: "Needs ping",
+        tone: "warning",
+      },
+      {
+        assets: ["Data pipeline diagram", "Retention questions"],
+        capacity: 44,
+        focus: "Transcript storage, data access, retention, source policy",
+        initials: "DA",
+        name: "Data Owner",
+        pings: 3,
+        role: "Data / Databases",
+        status: "Blocked",
+        tone: "error",
+      },
+    ],
+    teamPings: 14,
+    transcriptCoverage: 84,
+    transcriptEvents: [
+      {
+        actor: "Project Sponsor",
+        content: "We need the bot to join the Teams kickoff, gather technical context, then leave after the kickoff phase.",
+        marker: "Scope",
+        time: "15:08",
+      },
+      {
+        actor: "Baymax",
+        content: "Should the first dashboard view be role-based, so a UX/UI designer sees assigned design outputs first?",
+        marker: "Question asked",
+        time: "15:42",
+      },
+      {
+        actor: "Gurney",
+        content: "Yes, all the information sent to me should be first, including visuals, reports, and transcript highlights.",
+        marker: "UX/UI",
+        time: "15:45",
+      },
+      {
+        actor: "Baymax",
+        content: "What team capability profile should feasibility flags use: skills, tooling, capacity, or all three?",
+        marker: "Question asked",
+        time: "16:04",
+      },
+      {
+        actor: "Back End Lead",
+        content: "Teams integration needs a separate permissions and data-access decision before any pilot.",
+        marker: "Risk",
+        time: "16:18",
+      },
+    ],
+  },
+  {
+    actionQueue: [
+      { label: "Map order-tracking screens", meta: "Customer portal flow needs designer sequencing", tone: "brand" },
+      { label: "Confirm checkout edge cases", meta: "Payment failure and reorder paths were mentioned", tone: "warning" },
+      { label: "Review responsive table pattern", meta: "Operations team needs dense project data", tone: "info" },
+    ],
+    botState: "Summarizing",
+    capabilityRows: [
+      { capability: "Customer portal UX", coverage: "Covered", evidence: "Existing commerce patterns and flow templates", owner: "Gurney" },
+      { capability: "Front-end build", coverage: "Covered", evidence: "Reusable table and dashboard components", owner: "Front End Lead" },
+      { capability: "ERP integration", coverage: "Needs review", evidence: "Order status source has not been confirmed", owner: "Back End Lead" },
+      { capability: "Customer data access", coverage: "Covered", evidence: "CRM source owner identified in kickoff", owner: "Data Owner" },
+    ],
+    categoryReviews: {
+      ux: { evidence: "Portal map generated from customer and ops tasks", state: "Needs screen edits", tone: "brand" },
+      frontend: { evidence: "React table density and mobile states called out", state: "Ready for owner review", tone: "success" },
+      backend: { evidence: "ERP and CRM dependency split needs confirmation", state: "Needs review", tone: "warning" },
+      data: { evidence: "CRM source owner confirmed", state: "Ready for approval", tone: "success" },
+    },
+    diagramNodes: {
+      ui: ["Customer home", "Order details", "Issue report", "Agent handoff"],
+      architecture: ["Portal app", "Auth layer", "CRM API", "ERP order source"],
+      pipeline: ["CRM profile", "Order events", "Baymax summary", "Ops report"],
+    },
+    feasibility: "Green",
+    id: "meridian",
+    lastSynced: "Yesterday at 2:14 PM",
+    name: "Project Meridian",
+    openRisks: 1,
+    ownerNote: "This is the cleaner pilot candidate: most UX and front-end assumptions are already understood.",
+    questions: [
+      {
+        askedBy: "Baymax",
+        assignee: "Gurney",
+        category: "UX/UI",
+        question: "Should the first flow prioritize customer self-serve order tracking or internal exception review?",
+        status: "Answered",
+        time: "10:18",
+      },
+      {
+        askedBy: "Baymax",
+        assignee: "Back End Lead",
+        category: "Architecture",
+        question: "Which system is the source of truth for order status: CRM, ERP, or fulfillment service?",
+        status: "Pending",
+        time: "10:27",
+      },
+      {
+        askedBy: "Gurney",
+        assignee: "Baymax",
+        category: "UX/UI",
+        question: "Generate a mobile version of the exception review flow for field teams.",
+        status: "Team requested",
+        time: "10:41",
+      },
+    ],
+    reportAssets: [
+      {
+        assignee: "Gurney",
+        category: "UX/UI",
+        description: "Customer portal screen map covering order tracking, issue reporting, and agent handoff states.",
+        evidence: "Transcript markers 10:18, 10:34, 10:41",
+        icon: Paintbrush,
+        status: "Needs screen edits",
+        title: "Customer portal flow",
+        tone: "brand",
+      },
+      {
+        assignee: "Gurney",
+        category: "Visual asset",
+        description: "Mobile-first dashboard flow for operations staff reviewing order exceptions.",
+        evidence: "Generated from team-requested question",
+        icon: Workflow,
+        status: "Draft",
+        title: "Ops exception journey",
+        tone: "info",
+      },
+      {
+        assignee: "Front End Lead",
+        category: "Front end",
+        description: "Component and responsive-density notes for tables, filters, and order detail panels.",
+        evidence: "Portal requirements capture",
+        icon: MonitorDot,
+        status: "Ready to approve",
+        title: "Portal front-end packet",
+        tone: "success",
+      },
+      {
+        assignee: "Back End Lead",
+        category: "Architecture",
+        description: "ERP, CRM, and fulfillment dependency map with source-of-truth decision pending.",
+        evidence: "Pending answer from 10:27",
+        icon: GitBranch,
+        status: "Needs source decision",
+        title: "Order data integration map",
+        tone: "warning",
+      },
+    ],
+    shortName: "Meridian",
+    status: "In discovery",
+    subtitle: "Customer portal modernization",
+    summary:
+      "Baymax captured a customer portal kickoff and structured the first pass around self-serve order tracking, internal exception review, source-of-truth decisions, and mobile operations needs.",
+    team: [
+      {
+        assets: ["Customer portal flow", "Ops exception journey"],
+        capacity: 61,
+        focus: "Customer flows, mobile states, accessibility for dense order tables",
+        initials: "GK",
+        name: "Gurney",
+        pings: 3,
+        role: "UX/UI Front End Designer",
+        status: "Reviewing",
+        tone: "brand",
+      },
+      {
+        assets: ["Portal front-end packet", "Responsive table notes"],
+        capacity: 70,
+        focus: "Table patterns, filter states, responsive detail panels",
+        initials: "FE",
+        name: "Front End Lead",
+        pings: 1,
+        role: "Front End",
+        status: "Clear",
+        tone: "success",
+      },
+      {
+        assets: ["Order data integration map"],
+        capacity: 66,
+        focus: "CRM, ERP, fulfillment source-of-truth mapping",
+        initials: "BE",
+        name: "Back End Lead",
+        pings: 3,
+        role: "Back End / Architecture",
+        status: "Needs ping",
+        tone: "warning",
+      },
+      {
+        assets: ["Customer data access notes"],
+        capacity: 52,
+        focus: "CRM access, customer profile fields, export controls",
+        initials: "DA",
+        name: "Data Owner",
+        pings: 1,
+        role: "Data / Databases",
+        status: "Clear",
+        tone: "success",
+      },
+    ],
+    teamPings: 8,
+    transcriptCoverage: 71,
+    transcriptEvents: [
+      {
+        actor: "Product Manager",
+        content: "The portal needs order tracking first, but operations also needs a path to inspect exceptions.",
+        marker: "Scope",
+        time: "10:05",
+      },
+      {
+        actor: "Baymax",
+        content: "Should the first flow prioritize customer self-serve order tracking or internal exception review?",
+        marker: "Question asked",
+        time: "10:18",
+      },
+      {
+        actor: "Operations Lead",
+        content: "We need both, but the customer self-serve flow is the first demo.",
+        marker: "Decision",
+        time: "10:22",
+      },
+      {
+        actor: "Baymax",
+        content: "Which system is the source of truth for order status: CRM, ERP, or fulfillment service?",
+        marker: "Question asked",
+        time: "10:27",
+      },
+      {
+        actor: "Gurney",
+        content: "Please generate a mobile version of the exception review flow for field teams.",
+        marker: "Team request",
+        time: "10:41",
+      },
+    ],
+  },
+  {
+    actionQueue: [
+      { label: "Separate data ownership from UI scope", meta: "Stakeholders mixed dashboard and warehouse asks", tone: "warning" },
+      { label: "Mark transcript storage as blocked", meta: "Policy and data retention owner missing", tone: "error" },
+      { label: "Sketch leadership risk view", meta: "Need a clean way to show why delivery is paused", tone: "brand" },
+    ],
+    botState: "Paused",
+    capabilityRows: [
+      { capability: "Executive dashboard UX", coverage: "Covered", evidence: "Existing dashboard patterns can support the view", owner: "Gurney" },
+      { capability: "Data platform ownership", coverage: "Blocked", evidence: "Warehouse owner not assigned", owner: "Data Owner" },
+      { capability: "Integration architecture", coverage: "Needs review", evidence: "Graph, warehouse, and BI tooling overlap", owner: "Back End Lead" },
+      { capability: "Governance workflow", coverage: "Blocked", evidence: "Approval policy is not defined", owner: "Delivery Lead" },
+    ],
+    categoryReviews: {
+      ux: { evidence: "Leadership risk view and admin controls captured", state: "Sketch needed", tone: "brand" },
+      frontend: { evidence: "Dashboard shell is feasible but data states are unclear", state: "Waiting on data states", tone: "warning" },
+      backend: { evidence: "Architecture crosses Teams, warehouse, and BI tooling", state: "Needs review", tone: "warning" },
+      data: { evidence: "No owner for retention, warehouse source, or access model", state: "Blocked", tone: "error" },
+    },
+    diagramNodes: {
+      ui: ["Leadership overview", "Risk detail", "Data owner queue", "Approval gate"],
+      architecture: ["Teams capture", "Governance service", "Warehouse", "BI workspace"],
+      pipeline: ["Transcript intake", "PII review", "Warehouse load", "Executive report"],
+    },
+    feasibility: "Red",
+    id: "atlas",
+    lastSynced: "Monday at 9:50 AM",
+    name: "Project Atlas",
+    openRisks: 4,
+    ownerNote: "Use this mock project to show blocked work: Baymax should help leadership see exactly what cannot move yet.",
+    questions: [
+      {
+        askedBy: "Baymax",
+        assignee: "Data Owner",
+        category: "Data",
+        question: "Who owns the warehouse table that stores meeting-derived project records?",
+        status: "Pending",
+        time: "09:16",
+      },
+      {
+        askedBy: "Baymax",
+        assignee: "Delivery Lead",
+        category: "Feasibility",
+        question: "Should this project be paused until governance and retention are approved?",
+        status: "Asked live",
+        time: "09:29",
+      },
+      {
+        askedBy: "Back End Lead",
+        assignee: "Baymax",
+        category: "Architecture",
+        question: "Ask leadership whether BI export is required for the first pilot.",
+        status: "Team requested",
+        time: "09:38",
+      },
+    ],
+    reportAssets: [
+      {
+        assignee: "Gurney",
+        category: "UX/UI",
+        description: "Leadership dashboard concept focused on surfacing blocked governance and data ownership decisions.",
+        evidence: "Transcript markers 09:16, 09:29, 09:45",
+        icon: Paintbrush,
+        status: "Sketch needed",
+        title: "Executive risk view",
+        tone: "brand",
+      },
+      {
+        assignee: "Back End Lead",
+        category: "Architecture",
+        description: "Teams capture, governance service, warehouse, and BI export relationship map.",
+        evidence: "Generated from architecture request",
+        icon: GitBranch,
+        status: "Needs review",
+        title: "Governance architecture map",
+        tone: "warning",
+      },
+      {
+        assignee: "Data Owner",
+        category: "Data",
+        description: "Data pipeline draft showing transcript intake, PII review, retention policy, and warehouse loading.",
+        evidence: "Blocked by unanswered ownership question",
+        icon: Database,
+        status: "Blocked",
+        title: "Governance data pipeline",
+        tone: "error",
+      },
+    ],
+    shortName: "Atlas",
+    status: "Blocked",
+    subtitle: "Leadership reporting and data governance",
+    summary:
+      "Baymax captured an early leadership reporting kickoff, but the work is blocked by unclear data ownership, retention policy, governance approval, and BI export scope.",
+    team: [
+      {
+        assets: ["Executive risk view"],
+        capacity: 47,
+        focus: "Blocked-state UX, leadership summary, approval flow",
+        initials: "GK",
+        name: "Gurney",
+        pings: 2,
+        role: "UX/UI Front End Designer",
+        status: "Reviewing",
+        tone: "brand",
+      },
+      {
+        assets: ["Dashboard state matrix"],
+        capacity: 49,
+        focus: "Unavailable data states, warning panels, export affordances",
+        initials: "FE",
+        name: "Front End Lead",
+        pings: 2,
+        role: "Front End",
+        status: "Needs ping",
+        tone: "warning",
+      },
+      {
+        assets: ["Governance architecture map"],
+        capacity: 39,
+        focus: "Governance service, BI export, Teams capture boundaries",
+        initials: "BE",
+        name: "Back End Lead",
+        pings: 4,
+        role: "Back End / Architecture",
+        status: "Needs ping",
+        tone: "warning",
+      },
+      {
+        assets: ["Governance data pipeline", "Retention policy queue"],
+        capacity: 28,
+        focus: "Warehouse ownership, PII review, retention policy",
+        initials: "DA",
+        name: "Data Owner",
+        pings: 4,
+        role: "Data / Databases",
+        status: "Blocked",
+        tone: "error",
+      },
+    ],
+    teamPings: 12,
+    transcriptCoverage: 58,
+    transcriptEvents: [
+      {
+        actor: "Leadership Sponsor",
+        content: "We want a dashboard that makes delivery risk visible before the project goes too far.",
+        marker: "Scope",
+        time: "09:08",
+      },
+      {
+        actor: "Baymax",
+        content: "Who owns the warehouse table that stores meeting-derived project records?",
+        marker: "Question asked",
+        time: "09:16",
+      },
+      {
+        actor: "Data Owner",
+        content: "That ownership is not assigned yet, and retention policy still needs review.",
+        marker: "Risk",
+        time: "09:22",
+      },
+      {
+        actor: "Baymax",
+        content: "Should this project be paused until governance and retention are approved?",
+        marker: "Question asked",
+        time: "09:29",
+      },
+      {
+        actor: "Back End Lead",
+        content: "Ask leadership whether BI export is required for the first pilot.",
+        marker: "Team request",
+        time: "09:38",
+      },
+    ],
+  },
+];
+
 export function App() {
   const [activeView, setActiveView] = useState<ViewId>("inbox");
+  const [activeProjectId, setActiveProjectId] = useState(projects[0].id);
   const [activeCategory, setActiveCategory] = useState<CategoryId>("ux");
   const [activeDiagram, setActiveDiagram] = useState<DiagramId>("ui");
+  const [projectDrafts, setProjectDrafts] = useState<Record<string, ProjectDraft>>({});
+  const [editMode, setEditMode] = useState(false);
+
+  const activeProject = useMemo(() => {
+    const project = projects.find((item) => item.id === activeProjectId) ?? projects[0];
+    return { ...project, ...projectDrafts[project.id] };
+  }, [activeProjectId, projectDrafts]);
+
   const activeCategoryData = categories.find((category) => category.id === activeCategory) ?? categories[0];
 
   useEffect(() => {
     window.scrollTo({ left: 0, top: 0 });
-  }, [activeView]);
+    setEditMode(false);
+  }, [activeView, activeProjectId]);
+
+  function selectProject(projectId: string, view: ViewId = activeView) {
+    setActiveProjectId(projectId);
+    setActiveView(view);
+  }
+
+  function updateProjectField<K extends keyof ProjectDraft>(field: K, value: ProjectDraft[K]) {
+    setProjectDrafts((current) => ({
+      ...current,
+      [activeProject.id]: {
+        ...current[activeProject.id],
+        [field]: value,
+      },
+    }));
+  }
+
+  function resetProjectDraft() {
+    setProjectDrafts((current) => {
+      const next = { ...current };
+      delete next[activeProject.id];
+      return next;
+    });
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900">
       <div className="mx-auto flex min-h-screen w-full max-w-[1720px] flex-col gap-4 p-3 lg:flex-row lg:p-4">
-        <Sidebar activeView={activeView} onViewChange={setActiveView} />
+        <Sidebar
+          activeProject={activeProject}
+          activeView={activeView}
+          onProjectChange={selectProject}
+          onViewChange={setActiveView}
+          projects={projects}
+        />
         <div className="min-w-0 flex-1 space-y-4">
-          <Topbar />
+          <Topbar activeProject={activeProject} onProjectChange={(projectId) => selectProject(projectId)} projects={projects} />
           <main className="min-w-0">
-            {activeView === "inbox" ? <InboxView onViewChange={setActiveView} /> : null}
+            {activeView === "inbox" ? (
+              <InboxView activeProject={activeProject} onProjectChange={selectProject} onViewChange={setActiveView} projects={projects} />
+            ) : null}
             {activeView === "project" ? (
               <ProjectView
                 activeCategory={activeCategory}
                 activeCategoryData={activeCategoryData}
                 activeDiagram={activeDiagram}
+                editMode={editMode}
                 onCategoryChange={setActiveCategory}
                 onDiagramChange={setActiveDiagram}
+                onEditModeChange={setEditMode}
+                onFieldChange={updateProjectField}
+                onProjectChange={selectProject}
+                onResetProject={resetProjectDraft}
+                project={activeProject}
+                projects={projects}
               />
             ) : null}
-            {activeView === "transcript" ? <TranscriptView /> : null}
-            {activeView === "team" ? <TeamView /> : null}
-            {activeView === "reports" ? <ReportsView /> : null}
-            {activeView === "admin" ? <AdminView /> : null}
+            {activeView === "transcript" ? <TranscriptView project={activeProject} /> : null}
+            {activeView === "team" ? <TeamView project={activeProject} /> : null}
+            {activeView === "reports" ? <ReportsView project={activeProject} /> : null}
+            {activeView === "admin" ? <AdminView project={activeProject} /> : null}
           </main>
         </div>
       </div>
@@ -326,14 +826,20 @@ export function App() {
 }
 
 function Sidebar({
+  activeProject,
   activeView,
+  onProjectChange,
   onViewChange,
+  projects,
 }: {
+  activeProject: Project;
   activeView: ViewId;
+  onProjectChange: (projectId: string, view?: ViewId) => void;
   onViewChange: (view: ViewId) => void;
+  projects: Project[];
 }) {
   return (
-    <aside className="rounded-habibiLg border border-gray-200 bg-white p-3 shadow-habibiXs lg:min-h-[calc(100vh-2rem)] lg:w-[280px]">
+    <aside className="rounded-habibiLg border border-gray-200 bg-white p-3 shadow-habibiXs lg:min-h-[calc(100vh-2rem)] lg:w-[300px]">
       <div className="flex items-center gap-3 border-b border-gray-200 px-2 pb-4">
         <div className="flex h-10 w-10 items-center justify-center rounded-habibiMd bg-brand-700 text-white">
           <Bot aria-hidden="true" className="h-5 w-5" />
@@ -367,28 +873,63 @@ function Sidebar({
           );
         })}
       </nav>
+      <div className="mt-5 border-t border-gray-200 pt-4">
+        <p className="px-2 text-xs font-semibold uppercase text-gray-500">Mock projects</p>
+        <div className="mt-2 grid gap-2">
+          {projects.map((project) => {
+            const active = project.id === activeProject.id;
+            const displayProject = active ? activeProject : project;
+
+            return (
+              <button
+                className={[
+                  "focus-ring rounded-habibiMd border p-3 text-left transition-colors",
+                  active ? "border-brand-200 bg-brand-50" : "border-gray-200 bg-white hover:bg-gray-50",
+                ].join(" ")}
+                key={project.id}
+                onClick={() => onProjectChange(project.id, "project")}
+                type="button"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="truncate text-sm font-semibold text-gray-900">{displayProject.shortName}</span>
+                  <Badge tone={feasibilityTone(displayProject.feasibility)}>{displayProject.feasibility}</Badge>
+                </div>
+                <p className="mt-1 truncate text-xs text-gray-500">{displayProject.subtitle}</p>
+              </button>
+            );
+          })}
+        </div>
+      </div>
       <div className="mt-4 rounded-habibiMd border border-warning-200 bg-warning-50 p-3">
         <div className="flex items-center gap-2">
           <AlertTriangle aria-hidden="true" className="h-4 w-4 text-warning-700" />
           <p className="text-sm font-semibold text-warning-700">Feasibility watch</p>
         </div>
         <p className="mt-2 text-xs leading-5 text-warning-700">
-          Capability profile needs owner review before Baymax scores this project as delivery-ready.
+          Switch projects to compare how Baymax explains green, yellow, and red readiness states.
         </p>
       </div>
     </aside>
   );
 }
 
-function Topbar() {
+function Topbar({
+  activeProject,
+  onProjectChange,
+  projects,
+}: {
+  activeProject: Project;
+  onProjectChange: (projectId: string) => void;
+  projects: Project[];
+}) {
   return (
     <header className="flex flex-col gap-3 rounded-habibiLg border border-gray-200 bg-white px-4 py-3 shadow-habibiXs xl:flex-row xl:items-center xl:justify-between">
-      <div>
-        <p className="text-sm font-semibold text-gray-900">Project Apollo kickoff</p>
-        <p className="text-xs text-gray-500">Microsoft Teams capture - last synced today at 4:26 PM</p>
+      <div className="min-w-0">
+        <p className="truncate text-sm font-semibold text-gray-900">{activeProject.name} kickoff</p>
+        <p className="truncate text-xs text-gray-500">Microsoft Teams capture - last synced {activeProject.lastSynced}</p>
       </div>
       <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center">
-        <label className="focus-within:shadow-[var(--habibi-focus-ring)] flex h-10 min-w-0 items-center gap-2 rounded-habibiMd border border-gray-300 bg-white px-3 text-sm text-gray-500 sm:w-[340px]">
+        <label className="focus-within:shadow-[var(--habibi-focus-ring)] flex h-10 min-w-0 items-center gap-2 rounded-habibiMd border border-gray-300 bg-white px-3 text-sm text-gray-500 sm:w-[280px]">
           <Search aria-hidden="true" className="h-4 w-4 shrink-0" />
           <input
             className="min-w-0 flex-1 border-0 bg-transparent text-gray-700 outline-none placeholder:text-gray-400"
@@ -396,6 +937,23 @@ function Topbar() {
             type="search"
           />
         </label>
+        <label className="sr-only" htmlFor="project-switcher">Switch project</label>
+        <select
+          className="focus-ring h-10 rounded-habibiMd border border-gray-300 bg-white px-3 text-sm font-medium text-gray-700 shadow-habibiXs"
+          id="project-switcher"
+          onChange={(event) => onProjectChange(event.target.value)}
+          value={activeProject.id}
+        >
+          {projects.map((project) => {
+            const displayProject = project.id === activeProject.id ? activeProject : project;
+
+            return (
+              <option key={project.id} value={project.id}>
+                {displayProject.name}
+              </option>
+            );
+          })}
+        </select>
         <div className="flex items-center gap-2">
           <IconButton icon={HelpCircle} label="Help" />
           <IconButton icon={Bell} label="Notifications" />
@@ -406,8 +964,19 @@ function Topbar() {
   );
 }
 
-function InboxView({ onViewChange }: { onViewChange: (view: ViewId) => void }) {
-  const designerAssets = reportAssets.filter((asset) => asset.assignee === "Gurney");
+function InboxView({
+  activeProject,
+  onProjectChange,
+  onViewChange,
+  projects,
+}: {
+  activeProject: Project;
+  onProjectChange: (projectId: string, view?: ViewId) => void;
+  onViewChange: (view: ViewId) => void;
+  projects: Project[];
+}) {
+  const designerAssets = activeProject.reportAssets.filter((asset) => asset.assignee === "Gurney");
+  const designerPings = activeProject.team.find((member) => member.name === "Gurney")?.pings ?? 0;
 
   return (
     <div className="space-y-4">
@@ -418,31 +987,33 @@ function InboxView({ onViewChange }: { onViewChange: (view: ViewId) => void }) {
               Open transcript
             </Button>
             <Button icon={PanelRightOpen} onClick={() => onViewChange("project")}>
-              Project dashboard
+              Edit project
             </Button>
           </>
         }
         eyebrow="UX/UI workspace"
-        status={<StatusPill icon={Sparkles} tone="brand">4 items routed to you</StatusPill>}
+        status={<StatusPill icon={Sparkles} tone="brand">{designerAssets.length + designerPings} items routed to you</StatusPill>}
         title="Your Baymax inbox"
       >
-        Role-based intake for the UX/UI front end designer. Baymax brings your assigned reports, visual assets,
-        transcript highlights, and open questions to the front of the dashboard.
+        Role-based intake for the UX/UI front end designer. Switch between mock projects to see assigned reports,
+        visual assets, transcript highlights, and open questions change by project.
       </PageHeader>
+
+      <ProjectQueue activeProject={activeProject} onProjectChange={onProjectChange} projects={projects} />
 
       <MetricStrip
         metrics={[
-          { delta: "2 need review", icon: Paintbrush, label: "Visual assets", tone: "brand", value: "5" },
-          { delta: "3 Baymax markers", icon: MessageSquareText, label: "Transcript mentions", tone: "info", value: "12" },
-          { delta: "1 awaiting you", icon: ClipboardCheck, label: "Approval steps", tone: "warning", value: "4" },
-          { delta: "Updated now", icon: Gauge, label: "UX feasibility", tone: "success", value: "Green" },
+          { delta: `${designerAssets.length} assigned`, icon: Paintbrush, label: "Visual assets", tone: "brand", value: String(activeProject.reportAssets.length) },
+          { delta: `${activeProject.questions.length} Baymax markers`, icon: MessageSquareText, label: "Transcript coverage", tone: "info", value: `${activeProject.transcriptCoverage}%` },
+          { delta: `${designerPings} pings to you`, icon: ClipboardCheck, label: "Approval steps", tone: "warning", value: String(activeProject.teamPings) },
+          { delta: activeProject.status, icon: Gauge, label: "Feasibility", tone: feasibilityTone(activeProject.feasibility), value: activeProject.feasibility },
         ]}
       />
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_390px]">
         <section className="space-y-4">
           <SectionHeading
-            description="Baymax groups your project-specific handoff before the wider team queue."
+            description={`Baymax groups your ${activeProject.shortName} handoff before the wider team queue.`}
             title="Sent to Gurney"
           />
           <div className="grid gap-4 lg:grid-cols-2">
@@ -450,9 +1021,9 @@ function InboxView({ onViewChange }: { onViewChange: (view: ViewId) => void }) {
               <AssetCard asset={asset} key={asset.title} />
             ))}
           </div>
-          <Panel title="Transcript highlights" actions={<Button icon={Eye} variant="secondary">Review markers</Button>}>
+          <Panel title="Transcript highlights" actions={<Button icon={Eye} onClick={() => onViewChange("transcript")} variant="secondary">Review markers</Button>}>
             <div className="space-y-3">
-              {transcriptEvents.slice(1, 4).map((event) => (
+              {activeProject.transcriptEvents.slice(1, 4).map((event) => (
                 <TranscriptRow event={event} key={event.time} />
               ))}
             </div>
@@ -462,14 +1033,13 @@ function InboxView({ onViewChange }: { onViewChange: (view: ViewId) => void }) {
         <aside className="space-y-4">
           <Panel title="Designer action queue" description="Assigned from kickoff output and Teams chat updates.">
             <div className="space-y-3">
-              <ActionRow label="Review UI flow diagram" meta="Generated from screens and user needs" tone="brand" />
-              <ActionRow label="Confirm dashboard module order" meta="Project summary, monitor, diagrams, questions" tone="warning" />
-              <ActionRow label="Approve UX notes for proposal" meta="Required before final project packet" tone="success" />
-              <ActionRow label="Reply to retention visibility question" meta="Data owner needs dashboard access expectations" tone="info" />
+              {activeProject.actionQueue.map((item) => (
+                <ActionRow item={item} key={item.label} />
+              ))}
             </div>
           </Panel>
           <Panel title="Project snapshot">
-            <ProjectSummaryCompact />
+            <ProjectSummaryCompact project={activeProject} />
           </Panel>
         </aside>
       </div>
@@ -481,14 +1051,28 @@ function ProjectView({
   activeCategory,
   activeCategoryData,
   activeDiagram,
+  editMode,
   onCategoryChange,
   onDiagramChange,
+  onEditModeChange,
+  onFieldChange,
+  onProjectChange,
+  onResetProject,
+  project,
+  projects,
 }: {
   activeCategory: CategoryId;
   activeCategoryData: (typeof categories)[number];
   activeDiagram: DiagramId;
+  editMode: boolean;
   onCategoryChange: (category: CategoryId) => void;
   onDiagramChange: (diagram: DiagramId) => void;
+  onEditModeChange: (value: boolean) => void;
+  onFieldChange: <K extends keyof ProjectDraft>(field: K, value: ProjectDraft[K]) => void;
+  onProjectChange: (projectId: string, view?: ViewId) => void;
+  onResetProject: () => void;
+  project: Project;
+  projects: Project[];
 }) {
   return (
     <div className="space-y-4">
@@ -500,43 +1084,54 @@ function ProjectView({
           </>
         }
         eyebrow="Project dashboard"
-        status={<StatusPill icon={Clock3} tone="warning">Kickoff review in progress</StatusPill>}
-        title="Project Apollo"
+        status={<StatusPill icon={Clock3} tone={statusTone(project.status)}>{project.status}</StatusPill>}
+        title={project.name}
       >
         Structured kickoff output from Teams: project summary, technical categories, generated diagrams, questions,
-        feasibility flags, and team review status.
+        feasibility flags, and team review status. Use the project cards and edit panel to move through mock projects.
       </PageHeader>
+
+      <ProjectQueue activeProject={project} onProjectChange={onProjectChange} projects={projects} />
 
       <MetricStrip
         metrics={[
-          { delta: "Teams connected", icon: Bot, label: "Bot state", tone: "success", value: "Listening" },
-          { delta: "7 questions logged", icon: MessageSquareText, label: "Transcript coverage", tone: "info", value: "84%" },
-          { delta: "Data and capacity", icon: AlertTriangle, label: "Open risks", tone: "warning", value: "2" },
-          { delta: "4 reviewers", icon: Users, label: "Team pings", tone: "brand", value: "14" },
+          { delta: "Teams connected", icon: Bot, label: "Bot state", tone: project.botState === "Paused" ? "warning" : "success", value: project.botState },
+          { delta: `${project.questions.length} questions logged`, icon: MessageSquareText, label: "Transcript coverage", tone: "info", value: `${project.transcriptCoverage}%` },
+          { delta: project.feasibility === "Red" ? "Governance and data" : "Data and capacity", icon: AlertTriangle, label: "Open risks", tone: project.openRisks > 2 ? "error" : "warning", value: String(project.openRisks) },
+          { delta: `${project.team.length} reviewers`, icon: Users, label: "Team pings", tone: "brand", value: String(project.teamPings) },
         ]}
+      />
+
+      <ProjectEditPanel
+        editMode={editMode}
+        onEditModeChange={onEditModeChange}
+        onFieldChange={onFieldChange}
+        onReset={onResetProject}
+        project={project}
       />
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
         <section className="space-y-4">
-          <ProjectSummaryPanel />
+          <ProjectSummaryPanel project={project} />
           <TechnicalBreakdown
             activeCategory={activeCategory}
             activeCategoryData={activeCategoryData}
             onCategoryChange={onCategoryChange}
+            project={project}
           />
-          <DiagramPanel activeDiagram={activeDiagram} onDiagramChange={onDiagramChange} />
-          <QuestionsLog />
+          <DiagramPanel activeDiagram={activeDiagram} onDiagramChange={onDiagramChange} project={project} />
+          <QuestionsLog project={project} />
         </section>
         <aside className="space-y-4">
-          <LiveMonitorPanel />
-          <FlagsPanel />
+          <LiveMonitorPanel project={project} />
+          <FlagsPanel project={project} />
         </aside>
       </div>
     </div>
   );
 }
 
-function TranscriptView() {
+function TranscriptView({ project }: { project: Project }) {
   return (
     <div className="space-y-4">
       <PageHeader
@@ -547,8 +1142,8 @@ function TranscriptView() {
           </>
         }
         eyebrow="Calls and Teams chat"
-        status={<StatusPill icon={MessageSquareText} tone="info">5 question markers</StatusPill>}
-        title="Transcript review"
+        status={<StatusPill icon={MessageSquareText} tone="info">{project.questions.length} question markers</StatusPill>}
+        title={`${project.name} transcript review`}
       >
         Call and chat evidence with Baymax questions pinned to the exact moments they were asked or requested.
       </PageHeader>
@@ -556,14 +1151,14 @@ function TranscriptView() {
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
         <Panel title="Kickoff transcript" description="Teams call transcript with Baymax question markers.">
           <div className="space-y-3">
-            {transcriptEvents.map((event) => (
+            {project.transcriptEvents.map((event) => (
               <TranscriptRow event={event} key={event.time} />
             ))}
           </div>
         </Panel>
         <Panel title="Question trace" description="Questions asked live, pending, or queued by the team.">
           <div className="space-y-3">
-            {questions.map((question) => (
+            {project.questions.map((question) => (
               <QuestionTraceCard question={question} key={`${question.time}-${question.question}`} />
             ))}
           </div>
@@ -573,7 +1168,7 @@ function TranscriptView() {
   );
 }
 
-function TeamView() {
+function TeamView({ project }: { project: Project }) {
   return (
     <div className="space-y-4">
       <PageHeader
@@ -584,30 +1179,30 @@ function TeamView() {
           </>
         }
         eyebrow="Team capability profile"
-        status={<StatusPill icon={Gauge} tone="warning">Feasibility model incomplete</StatusPill>}
-        title="People attached to Project Apollo"
+        status={<StatusPill icon={Gauge} tone={feasibilityTone(project.feasibility)}>Feasibility {project.feasibility}</StatusPill>}
+        title={`People attached to ${project.name}`}
       >
         Team members, skills, capacity, Baymax pings, and assigned outputs used to keep feasibility flags grounded.
       </PageHeader>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        {teamMembers.map((member) => (
+        {project.team.map((member) => (
           <TeamMemberCard member={member} key={member.name} />
         ))}
       </div>
-      <CapabilityMatrix />
+      <CapabilityMatrix project={project} />
     </div>
   );
 }
 
-function ReportsView() {
+function ReportsView({ project }: { project: Project }) {
   const groupedAssets = useMemo(
     () =>
-      teamMembers.map((member) => ({
+      project.team.map((member) => ({
         member,
-        assets: reportAssets.filter((asset) => asset.assignee === member.name),
+        assets: project.reportAssets.filter((asset) => asset.assignee === member.name),
       })),
-    [],
+    [project],
   );
 
   return (
@@ -620,19 +1215,15 @@ function ReportsView() {
           </>
         }
         eyebrow="Reports and visual assets"
-        status={<StatusPill icon={CheckCircle2} tone="success">3 ready for review</StatusPill>}
-        title="Generated project outputs"
+        status={<StatusPill icon={CheckCircle2} tone="success">{project.reportAssets.length} generated outputs</StatusPill>}
+        title={`${project.name} generated outputs`}
       >
         Reports, diagrams, and generated visual assets are grouped by the team member who needs to review or approve them.
       </PageHeader>
 
       <div className="space-y-4">
         {groupedAssets.map(({ assets, member }) => (
-          <Panel
-            actions={<Badge tone={member.tone}>{member.status}</Badge>}
-            key={member.name}
-            title={`${member.name} - ${member.role}`}
-          >
+          <Panel actions={<Badge tone={member.tone}>{member.status}</Badge>} key={member.name} title={`${member.name} - ${member.role}`}>
             {assets.length > 0 ? (
               <div className="grid gap-4 lg:grid-cols-2">
                 {assets.map((asset) => (
@@ -651,7 +1242,7 @@ function ReportsView() {
   );
 }
 
-function AdminView() {
+function AdminView({ project }: { project: Project }) {
   return (
     <div className="space-y-4">
       <PageHeader
@@ -668,12 +1259,21 @@ function AdminView() {
         Configure bot behavior, Teams access, capability profiles, question templates, data handling, and review gates.
       </PageHeader>
 
+      <Panel title="Active project overrides" description="Project-level settings that explain how admin edits would affect the selected workspace.">
+        <div className="grid gap-3 md:grid-cols-4">
+          <InlineMetric label="Selected project" value={project.shortName} />
+          <InlineMetric label="Bot state" value={project.botState} />
+          <InlineMetric label="Feasibility" value={project.feasibility} />
+          <InlineMetric label="Last synced" value={project.lastSynced} />
+        </div>
+      </Panel>
+
       <div className="grid gap-4 xl:grid-cols-2">
         <SettingsPanel
           icon={Bot}
           items={[
             ["Kickoff-only meeting mode", "Enabled"],
-            ["Live Teams chat monitoring", "Enabled for project channel"],
+            ["Live Teams chat monitoring", project.botState === "Paused" ? "Paused for governance" : "Enabled for project channel"],
             ["Real-time question guardrails", "Human approved templates"],
           ]}
           title="Bot behavior"
@@ -681,7 +1281,7 @@ function AdminView() {
         <SettingsPanel
           icon={ShieldCheck}
           items={[
-            ["Teams meeting access", "Awaiting IT review"],
+            ["Teams meeting access", project.feasibility === "Red" ? "Awaiting leadership approval" : "Enabled"],
             ["Transcript storage", "Project workspace only"],
             ["Generated report access", "Reviewer and admin roles"],
           ]}
@@ -690,9 +1290,9 @@ function AdminView() {
         <SettingsPanel
           icon={Gauge}
           items={[
-            ["Skills profile freshness", "12 days old"],
+            ["Skills profile freshness", project.feasibility === "Green" ? "Current" : "Needs owner review"],
             ["Capacity profile owner", "Delivery operations"],
-            ["Risk flag confidence", "Medium"],
+            ["Risk flag confidence", project.feasibility === "Red" ? "Low until blockers clear" : "Medium"],
           ]}
           title="Feasibility model"
         />
@@ -700,8 +1300,8 @@ function AdminView() {
           icon={ClipboardCheck}
           items={[
             ["UX/UI question pack", "Active"],
-            ["Architecture question pack", "Needs review"],
-            ["Data retention question pack", "Draft"],
+            ["Architecture question pack", project.openRisks > 2 ? "Needs leadership review" : "Active"],
+            ["Data retention question pack", project.feasibility === "Red" ? "Blocked" : "Draft"],
           ]}
           title="Question templates"
         />
@@ -710,36 +1310,177 @@ function AdminView() {
   );
 }
 
-function ProjectSummaryPanel() {
+function ProjectQueue({
+  activeProject,
+  onProjectChange,
+  projects,
+}: {
+  activeProject: Project;
+  onProjectChange: (projectId: string, view?: ViewId) => void;
+  projects: Project[];
+}) {
+  return (
+    <section className="grid gap-3 md:grid-cols-3">
+      {projects.map((project) => {
+        const active = project.id === activeProject.id;
+        const displayProject = active ? activeProject : project;
+
+        return (
+          <button
+            className={[
+              "focus-ring rounded-habibiLg border bg-white p-4 text-left shadow-habibiXs transition-colors",
+              active ? "border-brand-300 ring-2 ring-brand-100" : "border-gray-200 hover:bg-gray-50",
+            ].join(" ")}
+            key={project.id}
+            onClick={() => onProjectChange(project.id, "project")}
+            type="button"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-sm font-semibold text-gray-900">{displayProject.name}</span>
+              <Badge tone={feasibilityTone(displayProject.feasibility)}>{displayProject.feasibility}</Badge>
+            </div>
+            <p className="mt-1 text-xs text-gray-500">{displayProject.subtitle}</p>
+            <div className="mt-4 grid grid-cols-3 gap-2 text-xs">
+              <MiniStat label="Risks" value={String(displayProject.openRisks)} />
+              <MiniStat label="Questions" value={String(displayProject.questions.length)} />
+              <MiniStat label="Assets" value={String(displayProject.reportAssets.length)} />
+            </div>
+          </button>
+        );
+      })}
+    </section>
+  );
+}
+
+function ProjectEditPanel({
+  editMode,
+  onEditModeChange,
+  onFieldChange,
+  onReset,
+  project,
+}: {
+  editMode: boolean;
+  onEditModeChange: (value: boolean) => void;
+  onFieldChange: <K extends keyof ProjectDraft>(field: K, value: ProjectDraft[K]) => void;
+  onReset: () => void;
+  project: Project;
+}) {
+  return (
+    <Panel
+      actions={
+        <>
+          <Button icon={RotateCcw} onClick={onReset} variant="ghost">Reset mock edits</Button>
+          <Button icon={editMode ? Save : Edit3} onClick={() => onEditModeChange(!editMode)} variant={editMode ? "primary" : "secondary"}>
+            {editMode ? "Done editing" : "Edit details"}
+          </Button>
+        </>
+      }
+      description="A lightweight edit area to show how project owners could revise Baymax output before approval."
+      title="Project editing workspace"
+    >
+      {editMode ? (
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Field label="Project name">
+            <input
+              className="field-control"
+              onChange={(event) => onFieldChange("name", event.target.value)}
+              value={project.name}
+            />
+          </Field>
+          <Field label="Last synced label">
+            <input
+              className="field-control"
+              onChange={(event) => onFieldChange("lastSynced", event.target.value)}
+              value={project.lastSynced}
+            />
+          </Field>
+          <Field label="Project status">
+            <select
+              className="field-control"
+              onChange={(event) => onFieldChange("status", event.target.value as ProjectStatus)}
+              value={project.status}
+            >
+              <option>Kickoff review</option>
+              <option>In discovery</option>
+              <option>Blocked</option>
+              <option>Ready for approval</option>
+            </select>
+          </Field>
+          <Field label="Feasibility">
+            <select
+              className="field-control"
+              onChange={(event) => onFieldChange("feasibility", event.target.value as Feasibility)}
+              value={project.feasibility}
+            >
+              <option>Green</option>
+              <option>Yellow</option>
+              <option>Red</option>
+            </select>
+          </Field>
+          <Field label="Project summary" wide>
+            <textarea
+              className="field-control min-h-28 resize-y"
+              onChange={(event) => onFieldChange("summary", event.target.value)}
+              value={project.summary}
+            />
+          </Field>
+          <Field label="Owner note" wide>
+            <textarea
+              className="field-control min-h-24 resize-y"
+              onChange={(event) => onFieldChange("ownerNote", event.target.value)}
+              value={project.ownerNote}
+            />
+          </Field>
+        </div>
+      ) : (
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+          <div>
+            <div className="flex flex-wrap gap-2">
+              <Badge tone={statusTone(project.status)}>{project.status}</Badge>
+              <Badge tone={feasibilityTone(project.feasibility)}>Feasibility {project.feasibility}</Badge>
+            </div>
+            <p className="mt-4 text-sm leading-6 text-gray-600">{project.summary}</p>
+            <p className="mt-3 rounded-habibiMd bg-gray-50 px-3 py-2 text-sm leading-6 text-gray-600">{project.ownerNote}</p>
+          </div>
+          <div className="rounded-habibiMd border border-gray-200 bg-gray-50 p-4">
+            <p className="text-xs font-semibold uppercase text-gray-500">Edit preview</p>
+            <p className="mt-2 text-sm leading-6 text-gray-600">
+              Use Edit details to try changing the project name, status, feasibility, summary, or owner note. The edits stay in this browser session and update the surrounding dashboard immediately.
+            </p>
+          </div>
+        </div>
+      )}
+    </Panel>
+  );
+}
+
+function ProjectSummaryPanel({ project }: { project: Project }) {
   return (
     <Panel title="Project summary" description="Status, feasibility, last update, project scope, and review state.">
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_260px]">
         <div>
           <div className="flex flex-wrap items-center gap-2">
-            <Badge tone="warning">Yellow feasibility</Badge>
-            <Badge tone="success">Teams connected</Badge>
-            <Badge tone="brand">Proposal draft</Badge>
+            <Badge tone={feasibilityTone(project.feasibility)}>Feasibility {project.feasibility}</Badge>
+            <Badge tone={project.botState === "Paused" ? "warning" : "success"}>{project.botState}</Badge>
+            <Badge tone={statusTone(project.status)}>{project.status}</Badge>
           </div>
-          <p className="mt-4 text-sm leading-6 text-gray-600">
-            Baymax captured a kickoff-only meeting brief and converted it into a reviewable proposal with technical
-            categories, generated visuals, open questions, and routed team approvals.
-          </p>
+          <p className="mt-4 text-sm leading-6 text-gray-600">{project.summary}</p>
           <div className="mt-5 grid gap-3 sm:grid-cols-3">
-            <InlineMetric label="Last update" value="4:26 PM" />
-            <InlineMetric label="Reviewers" value="4 active" />
-            <InlineMetric label="Approval" value="2 of 6" />
+            <InlineMetric label="Last update" value={project.lastSynced} />
+            <InlineMetric label="Reviewers" value={`${project.team.length} active`} />
+            <InlineMetric label="Open risks" value={String(project.openRisks)} />
           </div>
         </div>
         <div className="rounded-habibiMd border border-gray-200 bg-gray-50 p-4">
           <p className="text-sm font-semibold text-gray-900">Attached team</p>
           <div className="mt-4 flex -space-x-2">
-            {teamMembers.map((member) => (
-              <Avatar initials={member.initials} key={member.name} label={member.name} status="online" />
+            {project.team.map((member) => (
+              <Avatar initials={member.initials} key={member.name} label={member.name} status={member.status === "Blocked" ? "away" : "online"} />
             ))}
           </div>
           <div className="mt-4 space-y-2">
-            <Progress label="Transcript reviewed" value={84} />
-            <Progress label="Capability profile" value={62} tone="warning" />
+            <Progress label="Transcript reviewed" value={project.transcriptCoverage} />
+            <Progress label="Capability profile" value={Math.max(22, 100 - project.openRisks * 18)} tone={feasibilityTone(project.feasibility)} />
           </div>
         </div>
       </div>
@@ -751,11 +1492,15 @@ function TechnicalBreakdown({
   activeCategory,
   activeCategoryData,
   onCategoryChange,
+  project,
 }: {
   activeCategory: CategoryId;
   activeCategoryData: (typeof categories)[number];
   onCategoryChange: (category: CategoryId) => void;
+  project: Project;
 }) {
+  const review = project.categoryReviews[activeCategory];
+
   return (
     <Panel title="Technical breakdown" description="Fixed intake framework from the project proposal.">
       <div className="flex flex-wrap gap-2">
@@ -777,17 +1522,14 @@ function TechnicalBreakdown({
       <div className="mt-5 grid gap-4 lg:grid-cols-3">
         <InfoBlock label="Baymax listens for" value={activeCategoryData.listensFor} />
         <InfoBlock label="Dashboard output" value={activeCategoryData.output} />
-        <InfoBlock label="Review state" value={activeCategory === "data" ? "Blocked by retention answer" : "Ready for owner review"} />
+        <InfoBlock label="Review state" value={review.state} />
       </div>
       <div className="mt-5 rounded-habibiMd border border-gray-200 bg-gray-50 p-4">
         <div className="flex items-center gap-2">
-          <StatusDot tone={activeCategoryData.tone} />
+          <StatusDot tone={review.tone} />
           <p className="text-sm font-semibold text-gray-900">{activeCategoryData.label} evidence</p>
         </div>
-        <p className="mt-2 text-sm leading-6 text-gray-600">
-          Baymax links each category back to transcript lines, Teams chat updates, generated reports, and team pings so
-          reviewers can see why the proposal changed.
-        </p>
+        <p className="mt-2 text-sm leading-6 text-gray-600">{review.evidence}</p>
       </div>
     </Panel>
   );
@@ -796,9 +1538,11 @@ function TechnicalBreakdown({
 function DiagramPanel({
   activeDiagram,
   onDiagramChange,
+  project,
 }: {
   activeDiagram: DiagramId;
   onDiagramChange: (diagram: DiagramId) => void;
+  project: Project;
 }) {
   const diagrams: Array<{ id: DiagramId; label: string }> = [
     { id: "ui", label: "UI diagram" },
@@ -828,19 +1572,12 @@ function DiagramPanel({
           </button>
         ))}
       </div>
-      <DiagramCanvas type={activeDiagram} />
+      <DiagramCanvas nodes={project.diagramNodes[activeDiagram]} />
     </Panel>
   );
 }
 
-function DiagramCanvas({ type }: { type: DiagramId }) {
-  const nodes =
-    type === "ui"
-      ? ["Designer inbox", "Project dashboard", "Transcript markers", "Reports and assets"]
-      : type === "architecture"
-        ? ["Teams call", "Baymax bot", "Intake framework", "Admin dashboard"]
-        : ["Transcript store", "Structured proposal", "Report assets", "Review archive"];
-
+function DiagramCanvas({ nodes }: { nodes: string[] }) {
   return (
     <div className="mt-5 overflow-hidden rounded-habibiMd border border-gray-200 bg-gray-50 p-5">
       <div className="grid gap-3 md:grid-cols-4">
@@ -860,7 +1597,7 @@ function DiagramCanvas({ type }: { type: DiagramId }) {
   );
 }
 
-function QuestionsLog() {
+function QuestionsLog({ project }: { project: Project }) {
   return (
     <Panel title="Questions log" description="Asked, pending, and team-requested questions with transcript anchors.">
       <div className="overflow-x-auto rounded-habibiMd border border-gray-200">
@@ -875,7 +1612,7 @@ function QuestionsLog() {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {questions.map((question) => (
+            {project.questions.map((question) => (
               <tr className="hover:bg-gray-50" key={`${question.time}-${question.question}`}>
                 <td className="px-4 py-3 font-mono text-xs text-gray-500">{question.time}</td>
                 <td className="px-4 py-3 text-gray-700">{question.question}</td>
@@ -891,11 +1628,11 @@ function QuestionsLog() {
   );
 }
 
-function LiveMonitorPanel() {
+function LiveMonitorPanel({ project }: { project: Project }) {
   return (
     <Panel title="Chat and meeting monitor" description="Recent Teams activity Baymax is tracking for this kickoff.">
       <div className="space-y-3">
-        {transcriptEvents.map((event) => (
+        {project.transcriptEvents.map((event) => (
           <TranscriptRow event={event} key={event.time} compact />
         ))}
       </div>
@@ -903,11 +1640,11 @@ function LiveMonitorPanel() {
   );
 }
 
-function FlagsPanel() {
+function FlagsPanel({ project }: { project: Project }) {
   return (
     <Panel title="Flags and pings" description="Alerts tied to team members and generated sections.">
       <div className="space-y-3">
-        {teamMembers.map((member) => (
+        {project.team.map((member) => (
           <div className="flex items-start gap-3 rounded-habibiMd border border-gray-200 bg-gray-50 p-3" key={member.name}>
             <Avatar initials={member.initials} label={member.name} />
             <div className="min-w-0 flex-1">
@@ -924,19 +1661,17 @@ function FlagsPanel() {
   );
 }
 
-function ProjectSummaryCompact() {
+function ProjectSummaryCompact({ project }: { project: Project }) {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap gap-2">
-        <Badge tone="warning">Feasibility yellow</Badge>
+        <Badge tone={feasibilityTone(project.feasibility)}>Feasibility {project.feasibility}</Badge>
         <Badge tone="info">Kickoff only</Badge>
       </div>
-      <p className="text-sm leading-6 text-gray-600">
-        Baymax captured a Teams kickoff and generated a structured project packet for team review.
-      </p>
+      <p className="text-sm leading-6 text-gray-600">{project.summary}</p>
       <div className="space-y-3">
-        <Progress label="Designer review" value={72} />
-        <Progress label="Report approval" value={46} tone="warning" />
+        <Progress label="Designer review" value={Math.min(95, 44 + project.reportAssets.filter((asset) => asset.assignee === "Gurney").length * 14)} />
+        <Progress label="Report approval" value={Math.max(24, 86 - project.openRisks * 12)} tone={project.openRisks > 2 ? "error" : "warning"} />
       </div>
     </div>
   );
@@ -957,7 +1692,7 @@ function TeamMemberCard({ member }: { member: TeamMember }) {
       </div>
       <p className="mt-4 text-sm leading-6 text-gray-600">{member.focus}</p>
       <div className="mt-5">
-        <Progress label="Capacity allocated" value={Number(member.capacity.replace("%", ""))} tone={member.tone} />
+        <Progress label="Capacity allocated" value={member.capacity} tone={member.tone} />
       </div>
       <div className="mt-5 flex flex-wrap gap-2">
         {member.assets.map((asset) => (
@@ -970,14 +1705,7 @@ function TeamMemberCard({ member }: { member: TeamMember }) {
   );
 }
 
-function CapabilityMatrix() {
-  const rows = [
-    ["UX/UI flows", "Covered", "Gurney", "Current design-library patterns available"],
-    ["Front-end build", "Covered", "Front End Lead", "React/Tailwind stack aligns"],
-    ["Teams integration", "Needs review", "Back End Lead", "Bot Framework and Graph path unresolved"],
-    ["Data retention", "Blocked", "Data Owner", "Storage and access policy needed"],
-  ];
-
+function CapabilityMatrix({ project }: { project: Project }) {
   return (
     <Panel title="Capability and feasibility matrix" description="Reference profile Baymax uses before applying risk flags.">
       <div className="overflow-x-auto rounded-habibiMd border border-gray-200">
@@ -991,16 +1719,16 @@ function CapabilityMatrix() {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {rows.map(([capability, coverage, owner, evidence]) => (
-              <tr key={capability}>
-                <td className="px-4 py-3 font-medium text-gray-900">{capability}</td>
+            {project.capabilityRows.map((row) => (
+              <tr key={row.capability}>
+                <td className="px-4 py-3 font-medium text-gray-900">{row.capability}</td>
                 <td className="px-4 py-3">
-                  <Badge tone={coverage === "Blocked" ? "error" : coverage === "Needs review" ? "warning" : "success"}>
-                    {coverage}
+                  <Badge tone={row.coverage === "Blocked" ? "error" : row.coverage === "Needs review" ? "warning" : "success"}>
+                    {row.coverage}
                   </Badge>
                 </td>
-                <td className="px-4 py-3 text-gray-600">{owner}</td>
-                <td className="px-4 py-3 text-gray-600">{evidence}</td>
+                <td className="px-4 py-3 text-gray-600">{row.owner}</td>
+                <td className="px-4 py-3 text-gray-600">{row.evidence}</td>
               </tr>
             ))}
           </tbody>
@@ -1159,7 +1887,7 @@ function TranscriptRow({
   event,
 }: {
   compact?: boolean;
-  event: (typeof transcriptEvents)[number];
+  event: TranscriptEvent;
 }) {
   const isQuestion = event.marker === "Question asked";
 
@@ -1200,16 +1928,25 @@ function QuestionTraceCard({ question }: { question: Question }) {
   );
 }
 
-function ActionRow({ label, meta, tone }: { label: string; meta: string; tone: Tone }) {
+function ActionRow({ item }: { item: ActionItem }) {
   return (
     <div className="flex items-start gap-3 rounded-habibiMd border border-gray-200 bg-white p-3">
-      <StatusDot tone={tone} />
+      <StatusDot tone={item.tone} />
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-semibold text-gray-900">{label}</p>
-        <p className="mt-1 text-sm leading-5 text-gray-500">{meta}</p>
+        <p className="text-sm font-semibold text-gray-900">{item.label}</p>
+        <p className="mt-1 text-sm leading-5 text-gray-500">{item.meta}</p>
       </div>
       <ChevronRight aria-hidden="true" className="mt-1 h-4 w-4 text-gray-400" />
     </div>
+  );
+}
+
+function Field({ children, label, wide = false }: { children: React.ReactNode; label: string; wide?: boolean }) {
+  return (
+    <label className={wide ? "lg:col-span-2" : undefined}>
+      <span className="mb-1.5 block text-sm font-semibold text-gray-700">{label}</span>
+      {children}
+    </label>
   );
 }
 
@@ -1231,22 +1968,32 @@ function InlineMetric({ label, value }: { label: string; value: string }) {
   );
 }
 
+function MiniStat({ label, value }: { label: string; value: string }) {
+  return (
+    <span className="rounded-habibiSm bg-gray-100 px-2 py-1 text-gray-600">
+      <span className="font-semibold text-gray-900">{value}</span> {label}
+    </span>
+  );
+}
+
 function Progress({ label, tone = "brand", value }: { label: string; tone?: Tone; value: number }) {
+  const safeValue = Math.max(0, Math.min(100, Math.round(value)));
+
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-3 text-sm">
         <span className="font-medium text-gray-700">{label}</span>
-        <span className="font-mono text-xs text-gray-500">{value}%</span>
+        <span className="font-mono text-xs text-gray-500">{safeValue}%</span>
       </div>
       <div
         aria-label={label}
         aria-valuemax={100}
         aria-valuemin={0}
-        aria-valuenow={value}
+        aria-valuenow={safeValue}
         className="h-2 overflow-hidden rounded-full bg-gray-200"
         role="progressbar"
       >
-        <div className={["h-full rounded-full transition-all", progressTone(tone)].join(" ")} style={{ width: `${value}%` }} />
+        <div className={["h-full rounded-full transition-all", progressTone(tone)].join(" ")} style={{ width: `${safeValue}%` }} />
       </div>
     </div>
   );
@@ -1348,6 +2095,23 @@ function Avatar({
       ) : null}
     </div>
   );
+}
+
+function feasibilityTone(feasibility: Feasibility): Tone {
+  return feasibility === "Green" ? "success" : feasibility === "Yellow" ? "warning" : "error";
+}
+
+function statusTone(status: ProjectStatus): Tone {
+  if (status === "Ready for approval") {
+    return "success";
+  }
+  if (status === "Blocked") {
+    return "error";
+  }
+  if (status === "In discovery") {
+    return "info";
+  }
+  return "warning";
 }
 
 function badgeTone(tone: Tone) {
