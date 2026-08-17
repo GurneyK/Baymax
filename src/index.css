@@ -1,0 +1,67 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  background: #fcfcfd;
+  color: #101828;
+
+  --habibi-brand-700: #6941c6;
+  --habibi-brand-600: #7f56d9;
+  --habibi-gray-25: #fcfcfd;
+  --habibi-gray-50: #f9fafb;
+  --habibi-gray-100: #f2f4f7;
+  --habibi-gray-200: #e4e7ec;
+  --habibi-gray-300: #d0d5dd;
+  --habibi-gray-500: #667085;
+  --habibi-gray-700: #344054;
+  --habibi-gray-900: #101828;
+  --habibi-info-500: #2e90fa;
+  --habibi-success-500: #12b76a;
+  --habibi-focus-ring: 0 0 0 4px #f4ebff;
+  --habibi-error-ring: 0 0 0 4px #fee4e2;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  min-width: 320px;
+  min-height: 100%;
+}
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+  background:
+    linear-gradient(180deg, rgba(249, 250, 251, 0.86), rgba(252, 252, 253, 1)),
+    #fcfcfd;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+::selection {
+  background: #e9d7fe;
+  color: #42307d;
+}
+
+.focus-ring {
+  outline: none;
+}
+
+.focus-ring:focus-visible {
+  box-shadow: var(--habibi-focus-ring);
+}
