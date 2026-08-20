@@ -17,7 +17,6 @@ import {
   GitBranch,
   HelpCircle,
   LayoutDashboard,
-  Lock,
   MessageSquareText,
   MonitorDot,
   Paintbrush,
@@ -109,6 +108,28 @@ type CategoryReview = {
   tone: Tone;
 };
 
+type MeetingSlot = {
+  agenda: string;
+  attendees: number;
+  botAccess: "Ready" | "Needs approval" | "Paused";
+  business: string;
+  host: string;
+  id: string;
+  projectId: string;
+  recommended: boolean;
+  status: string;
+  time: string;
+  title: string;
+  tone: Tone;
+};
+
+type FlowStage = {
+  detail: string;
+  owner: string;
+  title: string;
+  tone: Tone;
+};
+
 type Project = {
   actionQueue: ActionItem[];
   botState: string;
@@ -136,12 +157,12 @@ type Project = {
 type ProjectDraft = Partial<Pick<Project, "feasibility" | "lastSynced" | "name" | "ownerNote" | "status" | "summary">>;
 
 const navItems: NavItem[] = [
-  { id: "inbox", icon: LayoutDashboard, label: "My inbox", meta: "UX/UI first" },
-  { id: "project", icon: FolderKanban, label: "Projects", meta: "Switch and edit" },
+  { id: "admin", icon: Settings, label: "Admin command", meta: "Teams connector" },
+  { id: "inbox", icon: LayoutDashboard, label: "Designer review", meta: "Mockups to approve" },
+  { id: "project", icon: FolderKanban, label: "Projects", meta: "Scope and edits" },
   { id: "transcript", icon: MessageSquareText, label: "Transcripts", meta: "Calls and chat" },
-  { id: "team", icon: Users, label: "Team", meta: "Skills and pings" },
-  { id: "reports", icon: FileText, label: "Reports", meta: "Assets by owner" },
-  { id: "admin", icon: Settings, label: "Admin", meta: "Bot controls" },
+  { id: "team", icon: Users, label: "Team visibility", meta: "Members and pings" },
+  { id: "reports", icon: FileText, label: "Review packets", meta: "Assets by owner" },
 ];
 
 const categories: Array<{ id: CategoryId; label: string; output: string; listensFor: string; tone: Tone }> = [
@@ -172,6 +193,124 @@ const categories: Array<{ id: CategoryId; label: string; output: string; listens
     listensFor: "Data sources, transcript storage, pipelines, retention",
     output: "Suggested data pipeline diagram",
     tone: "error",
+  },
+];
+
+const operatingFlow: FlowStage[] = [
+  {
+    detail: "PM creates the opportunity record after a business reaches out.",
+    owner: "PM / Admin",
+    title: "Business intake",
+    tone: "info",
+  },
+  {
+    detail: "Admin chooses the Teams meeting, project, and visible reviewers before Baymax joins.",
+    owner: "Baymax admin",
+    title: "Send bot to kickoff",
+    tone: "brand",
+  },
+  {
+    detail: "Baymax captures scope, flows, users, systems, constraints, and unanswered questions.",
+    owner: "Baymax",
+    title: "Listen and ask",
+    tone: "warning",
+  },
+  {
+    detail: "Baymax turns the meeting into first-pass wireframes, diagrams, and review notes.",
+    owner: "Baymax",
+    title: "Generate drafts",
+    tone: "brand",
+  },
+  {
+    detail: "Design, front end, back end, and data owners edit or approve their sections.",
+    owner: "Team reviewers",
+    title: "Review packet",
+    tone: "success",
+  },
+  {
+    detail: "Approved drafts go back to the business so the PM can confirm direction.",
+    owner: "PM / Admin",
+    title: "Business handoff",
+    tone: "info",
+  },
+  {
+    detail: "If accepted, the real team joins the project with a faster, cleaner starting point.",
+    owner: "Business + team",
+    title: "Approve or deny",
+    tone: "success",
+  },
+];
+
+const meetingSlots: MeetingSlot[] = [
+  {
+    agenda: "Initial Teams kickoff for dashboard automation, UX flows, transcript handling, and delivery feasibility.",
+    attendees: 8,
+    botAccess: "Ready",
+    business: "Northstar Operations",
+    host: "PM Lead",
+    id: "apollo-kickoff",
+    projectId: "apollo",
+    recommended: true,
+    status: "Kickoff scheduled",
+    time: "Today, 4:30 PM",
+    title: "Apollo discovery kickoff",
+    tone: "brand",
+  },
+  {
+    agenda: "Follow-up with data and architecture owners for retention, transcript access, and Teams permissions.",
+    attendees: 5,
+    botAccess: "Needs approval",
+    business: "Northstar Operations",
+    host: "Delivery Lead",
+    id: "apollo-data-review",
+    projectId: "apollo",
+    recommended: false,
+    status: "Permission review",
+    time: "Tomorrow, 10:00 AM",
+    title: "Apollo data access review",
+    tone: "warning",
+  },
+  {
+    agenda: "Customer portal intake covering order tracking, exception handling, mobile operations, and source-of-truth decisions.",
+    attendees: 7,
+    botAccess: "Ready",
+    business: "Meridian Retail Group",
+    host: "Product Manager",
+    id: "meridian-kickoff",
+    projectId: "meridian",
+    recommended: true,
+    status: "Kickoff ready",
+    time: "Today, 2:00 PM",
+    title: "Meridian customer portal kickoff",
+    tone: "success",
+  },
+  {
+    agenda: "Leadership reporting intake with governance, warehouse ownership, BI export, and project approval gates.",
+    attendees: 10,
+    botAccess: "Paused",
+    business: "Atlas Leadership Council",
+    host: "Executive PM",
+    id: "atlas-leadership",
+    projectId: "atlas",
+    recommended: true,
+    status: "Blocked by governance",
+    time: "Monday, 9:30 AM",
+    title: "Atlas leadership reporting kickoff",
+    tone: "error",
+  },
+  {
+    agenda: "Decision meeting to confirm whether Atlas should proceed, pause, or return to the business for scope reduction.",
+    attendees: 6,
+    botAccess: "Needs approval",
+    business: "Atlas Leadership Council",
+    host: "Delivery Lead",
+    id: "atlas-decision",
+    projectId: "atlas",
+    recommended: false,
+    status: "Decision gate",
+    time: "Thursday, 11:15 AM",
+    title: "Atlas feasibility decision",
+    tone: "warning",
   },
 ];
 
@@ -740,18 +879,37 @@ const projects: Project[] = [
 ];
 
 export function App() {
-  const [activeView, setActiveView] = useState<ViewId>("inbox");
+  const [activeView, setActiveView] = useState<ViewId>("admin");
   const [activeProjectId, setActiveProjectId] = useState(projects[0].id);
   const [activeCategory, setActiveCategory] = useState<CategoryId>("ux");
   const [activeDiagram, setActiveDiagram] = useState<DiagramId>("ui");
   const [projectDrafts, setProjectDrafts] = useState<Record<string, ProjectDraft>>({});
   const [editMode, setEditMode] = useState(false);
+  const [selectedMeetingByProject, setSelectedMeetingByProject] = useState<Record<string, string>>(() =>
+    Object.fromEntries(
+      projects.map((project) => [
+        project.id,
+        meetingSlots.find((meeting) => meeting.projectId === project.id && meeting.recommended)?.id ??
+          meetingSlots.find((meeting) => meeting.projectId === project.id)?.id ??
+          "",
+      ]),
+    ),
+  );
+  const [selectedTeamByProject, setSelectedTeamByProject] = useState<Record<string, string[]>>(() =>
+    Object.fromEntries(projects.map((project) => [project.id, project.team.map((member) => member.name)])),
+  );
 
   const activeProject = useMemo(() => {
     const project = projects.find((item) => item.id === activeProjectId) ?? projects[0];
     return { ...project, ...projectDrafts[project.id] };
   }, [activeProjectId, projectDrafts]);
 
+  const activeMeetings = useMemo(
+    () => meetingSlots.filter((meeting) => meeting.projectId === activeProject.id),
+    [activeProject.id],
+  );
+  const selectedMeetingId = selectedMeetingByProject[activeProject.id] ?? activeMeetings[0]?.id ?? "";
+  const selectedTeam = selectedTeamByProject[activeProject.id] ?? activeProject.team.map((member) => member.name);
   const activeCategoryData = categories.find((category) => category.id === activeCategory) ?? categories[0];
 
   useEffect(() => {
@@ -779,6 +937,27 @@ export function App() {
       const next = { ...current };
       delete next[activeProject.id];
       return next;
+    });
+  }
+
+  function selectMeeting(meetingId: string) {
+    setSelectedMeetingByProject((current) => ({
+      ...current,
+      [activeProject.id]: meetingId,
+    }));
+  }
+
+  function toggleTeamMember(memberName: string) {
+    setSelectedTeamByProject((current) => {
+      const selectedMembers = current[activeProject.id] ?? activeProject.team.map((member) => member.name);
+      const nextMembers = selectedMembers.includes(memberName)
+        ? selectedMembers.filter((name) => name !== memberName)
+        : [...selectedMembers, memberName];
+
+      return {
+        ...current,
+        [activeProject.id]: nextMembers,
+      };
     });
   }
 
@@ -817,7 +996,19 @@ export function App() {
             {activeView === "transcript" ? <TranscriptView project={activeProject} /> : null}
             {activeView === "team" ? <TeamView project={activeProject} /> : null}
             {activeView === "reports" ? <ReportsView project={activeProject} /> : null}
-            {activeView === "admin" ? <AdminView project={activeProject} /> : null}
+            {activeView === "admin" ? (
+              <AdminView
+                meetings={activeMeetings}
+                onMeetingChange={selectMeeting}
+                onProjectChange={selectProject}
+                onTeamToggle={toggleTeamMember}
+                onViewChange={setActiveView}
+                project={activeProject}
+                projects={projects}
+                selectedMeetingId={selectedMeetingId}
+                selectedTeam={selectedTeam}
+              />
+            ) : null}
           </main>
         </div>
       </div>
@@ -991,13 +1182,15 @@ function InboxView({
             </Button>
           </>
         }
-        eyebrow="UX/UI workspace"
+        eyebrow="Designer review workspace"
         status={<StatusPill icon={Sparkles} tone="brand">{designerAssets.length + designerPings} items routed to you</StatusPill>}
-        title="Your Baymax inbox"
+        title="Designer review queue"
       >
-        Role-based intake for the UX/UI front end designer. Switch between mock projects to see assigned reports,
-        visual assets, transcript highlights, and open questions change by project.
+        Baymax creates first-pass mockups, flow maps, and design notes from the kickoff so one designer can review the
+        strongest draft instead of every early project needing multiple designers in discovery.
       </PageHeader>
+
+      <DesignerApprovalFlowPanel project={activeProject} onViewChange={onViewChange} />
 
       <ProjectQueue activeProject={activeProject} onProjectChange={onProjectChange} projects={projects} />
 
@@ -1044,6 +1237,71 @@ function InboxView({
         </aside>
       </div>
     </div>
+  );
+}
+
+function DesignerApprovalFlowPanel({
+  onViewChange,
+  project,
+}: {
+  onViewChange: (view: ViewId) => void;
+  project: Project;
+}) {
+  const designerAssets = project.reportAssets.filter((asset) => asset.assignee === "Gurney");
+  const flow: FlowStage[] = [
+    {
+      detail: "Baymax converts kickoff context into draft screens, flow maps, and design questions.",
+      owner: "Baymax",
+      title: "Mockups generated",
+      tone: "brand",
+    },
+    {
+      detail: "Designer reviews the drafts, edits weak assumptions, and requests regeneration where needed.",
+      owner: "Designer",
+      title: "Review and edit",
+      tone: "warning",
+    },
+    {
+      detail: "Approved design assets join front-end, architecture, and data notes in the review packet.",
+      owner: "Project team",
+      title: "Packet approved",
+      tone: "success",
+    },
+    {
+      detail: "Admin or PM sends the approved packet back to the business for a go or no-go decision.",
+      owner: "PM / Admin",
+      title: "Return to business",
+      tone: "info",
+    },
+  ];
+
+  return (
+    <Panel
+      actions={
+        <>
+          <Button icon={FileText} onClick={() => onViewChange("reports")} variant="secondary">
+            Open review packet
+          </Button>
+          <Button icon={CheckCircle2}>Approve mockups</Button>
+        </>
+      }
+      description={`${designerAssets.length} Baymax-generated assets are assigned to the UX/UI reviewer for ${project.shortName}.`}
+      title="Mockup approval flow"
+    >
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        {flow.map((stage, index) => (
+          <article className="rounded-habibiMd border border-gray-200 bg-gray-50 p-4" key={stage.title}>
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-xs font-semibold uppercase text-gray-500">Step {index + 1}</span>
+              <StatusDot tone={stage.tone} />
+            </div>
+            <h3 className="mt-3 text-sm font-semibold text-gray-900">{stage.title}</h3>
+            <p className="mt-1 text-xs font-medium text-gray-500">{stage.owner}</p>
+            <p className="mt-3 text-sm leading-5 text-gray-600">{stage.detail}</p>
+          </article>
+        ))}
+      </div>
+    </Panel>
   );
 }
 
@@ -1242,31 +1500,81 @@ function ReportsView({ project }: { project: Project }) {
   );
 }
 
-function AdminView({ project }: { project: Project }) {
+function AdminView({
+  meetings,
+  onMeetingChange,
+  onProjectChange,
+  onTeamToggle,
+  onViewChange,
+  project,
+  projects,
+  selectedMeetingId,
+  selectedTeam,
+}: {
+  meetings: MeetingSlot[];
+  onMeetingChange: (meetingId: string) => void;
+  onProjectChange: (projectId: string, view?: ViewId) => void;
+  onTeamToggle: (memberName: string) => void;
+  onViewChange: (view: ViewId) => void;
+  project: Project;
+  projects: Project[];
+  selectedMeetingId: string;
+  selectedTeam: string[];
+}) {
+  const selectedMeeting = meetings.find((meeting) => meeting.id === selectedMeetingId) ?? meetings[0];
+  const clearReviewers = project.team.filter((member) => member.status === "Clear").length;
+  const selectedReviewerCount = selectedTeam.length;
+
   return (
     <div className="space-y-4">
       <PageHeader
         actions={
           <>
-            <Button icon={ShieldCheck} variant="secondary">Review access</Button>
-            <Button icon={CheckCircle2}>Save settings</Button>
+            <Button icon={PanelRightOpen} onClick={() => onViewChange("inbox")} variant="secondary">
+              Open designer review
+            </Button>
+            <Button icon={Send}>Send Baymax</Button>
           </>
         }
-        eyebrow="Admin settings"
-        status={<StatusPill icon={Lock} tone="info">Protected workspace</StatusPill>}
-        title="Baymax controls"
+        eyebrow="Admin command center"
+        status={<StatusPill icon={Bot} tone={selectedMeeting?.tone ?? "neutral"}>{selectedMeeting?.botAccess ?? "No Teams meeting"}</StatusPill>}
+        title="Baymax project intake"
       >
-        Configure bot behavior, Teams access, capability profiles, question templates, data handling, and review gates.
+        Control where Baymax goes, who can see the project, and which generated wireframes, diagrams, and notes get
+        reviewed before the real team joins. The goal is to remove redundant early design staffing by giving reviewers a
+        fast first draft to approve, edit, or send back to the business.
       </PageHeader>
 
-      <Panel title="Active project overrides" description="Project-level settings that explain how admin edits would affect the selected workspace.">
-        <div className="grid gap-3 md:grid-cols-4">
-          <InlineMetric label="Selected project" value={project.shortName} />
-          <InlineMetric label="Bot state" value={project.botState} />
-          <InlineMetric label="Feasibility" value={project.feasibility} />
-          <InlineMetric label="Last synced" value={project.lastSynced} />
-        </div>
-      </Panel>
+      <MetricStrip
+        metrics={[
+          { delta: selectedMeeting?.time ?? "Pick a Teams call", icon: Bot, label: "Meeting connector", tone: selectedMeeting?.tone ?? "neutral", value: selectedMeeting?.botAccess ?? "None" },
+          { delta: "Project team visibility", icon: Users, label: "Reviewers selected", tone: "brand", value: `${selectedReviewerCount}/${project.team.length}` },
+          { delta: "Wireframes and diagrams", icon: Workflow, label: "Draft outputs", tone: "info", value: String(project.reportAssets.length) },
+          { delta: project.status, icon: CheckCircle2, label: "Business decision gate", tone: feasibilityTone(project.feasibility), value: project.feasibility },
+        ]}
+      />
+
+      <OperatingFlowPanel />
+
+      <ProjectQueue activeProject={project} onProjectChange={onProjectChange} projects={projects} />
+
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
+        <section className="space-y-4">
+          <TeamsConnectorPanel
+            meetings={meetings}
+            onMeetingChange={onMeetingChange}
+            project={project}
+            selectedMeeting={selectedMeeting}
+            selectedMeetingId={selectedMeetingId}
+          />
+          <TeamVisibilityPanel onTeamToggle={onTeamToggle} project={project} selectedTeam={selectedTeam} />
+          <AdminGeneratedPacketPanel project={project} />
+        </section>
+        <aside className="space-y-4">
+          <RedundancyPanel project={project} />
+          <BusinessHandoffPanel clearReviewers={clearReviewers} project={project} selectedMeeting={selectedMeeting} selectedTeam={selectedTeam} />
+        </aside>
+      </div>
 
       <div className="grid gap-4 xl:grid-cols-2">
         <SettingsPanel
@@ -1306,6 +1614,297 @@ function AdminView({ project }: { project: Project }) {
           title="Question templates"
         />
       </div>
+    </div>
+  );
+}
+
+function OperatingFlowPanel() {
+  return (
+    <Panel title="Baymax operating flow" description="The admin-level path from first business contact to project approval.">
+      <ol className="grid gap-3 md:grid-cols-2 xl:grid-cols-7">
+        {operatingFlow.map((stage, index) => (
+          <li className="rounded-habibiMd border border-gray-200 bg-gray-50 p-4" key={stage.title}>
+            <div className="flex items-center justify-between gap-3">
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-xs font-semibold text-gray-700 shadow-habibiXs">
+                {index + 1}
+              </span>
+              <StatusDot tone={stage.tone} />
+            </div>
+            <h3 className="mt-4 text-sm font-semibold text-gray-900">{stage.title}</h3>
+            <p className="mt-1 text-xs font-medium text-gray-500">{stage.owner}</p>
+            <p className="mt-3 text-sm leading-5 text-gray-600">{stage.detail}</p>
+          </li>
+        ))}
+      </ol>
+    </Panel>
+  );
+}
+
+function TeamsConnectorPanel({
+  meetings,
+  onMeetingChange,
+  project,
+  selectedMeeting,
+  selectedMeetingId,
+}: {
+  meetings: MeetingSlot[];
+  onMeetingChange: (meetingId: string) => void;
+  project: Project;
+  selectedMeeting?: MeetingSlot;
+  selectedMeetingId: string;
+}) {
+  return (
+    <Panel
+      actions={<Button icon={Send}>Send bot to selected meeting</Button>}
+      description="Choose the Teams meeting Baymax should attend for kickoff discovery."
+      title="Teams meeting connector"
+    >
+      <div className="grid gap-3 lg:grid-cols-2">
+        {meetings.map((meeting) => (
+          <MeetingCard
+            active={meeting.id === selectedMeetingId}
+            key={meeting.id}
+            meeting={meeting}
+            onSelect={() => onMeetingChange(meeting.id)}
+          />
+        ))}
+      </div>
+      {selectedMeeting ? (
+        <div className="mt-4 grid gap-3 rounded-habibiMd border border-brand-200 bg-brand-50 p-4 md:grid-cols-3">
+          <InlineMetric label="Selected business" value={selectedMeeting.business} />
+          <InlineMetric label="Meeting host" value={selectedMeeting.host} />
+          <InlineMetric label="Baymax mode" value={project.botState} />
+        </div>
+      ) : null}
+    </Panel>
+  );
+}
+
+function MeetingCard({
+  active,
+  meeting,
+  onSelect,
+}: {
+  active: boolean;
+  meeting: MeetingSlot;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      aria-pressed={active}
+      className={[
+        "focus-ring rounded-habibiLg border bg-white p-4 text-left shadow-habibiXs transition-colors",
+        active ? "border-brand-300 ring-2 ring-brand-100" : "border-gray-200 hover:bg-gray-50",
+      ].join(" ")}
+      onClick={onSelect}
+      type="button"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold text-gray-900">{meeting.title}</p>
+          <p className="mt-1 text-xs text-gray-500">{meeting.business}</p>
+        </div>
+        <Badge tone={meeting.tone}>{meeting.botAccess}</Badge>
+      </div>
+      <p className="mt-3 text-sm leading-5 text-gray-600">{meeting.agenda}</p>
+      <div className="mt-4 grid gap-2 sm:grid-cols-3">
+        <MiniStat label="time" value={meeting.time} />
+        <MiniStat label="people" value={String(meeting.attendees)} />
+        <MiniStat label="host" value={meeting.host} />
+      </div>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <Badge tone={meeting.tone}>{meeting.status}</Badge>
+        {meeting.recommended ? <Badge tone="brand">Recommended</Badge> : null}
+      </div>
+    </button>
+  );
+}
+
+function TeamVisibilityPanel({
+  onTeamToggle,
+  project,
+  selectedTeam,
+}: {
+  onTeamToggle: (memberName: string) => void;
+  project: Project;
+  selectedTeam: string[];
+}) {
+  return (
+    <Panel
+      actions={<Button icon={Users} variant="secondary">Add reviewer</Button>}
+      description="Pick who can see the project workspace, transcript markers, generated drafts, and Baymax pings."
+      title="Project team visibility"
+    >
+      <div className="grid gap-3 lg:grid-cols-2">
+        {project.team.map((member) => {
+          const selected = selectedTeam.includes(member.name);
+
+          return (
+            <label
+              className={[
+                "flex cursor-pointer gap-3 rounded-habibiLg border p-4 transition-colors",
+                selected ? "border-brand-200 bg-brand-50" : "border-gray-200 bg-white hover:bg-gray-50",
+              ].join(" ")}
+              key={member.name}
+            >
+              <input
+                checked={selected}
+                className="mt-1 h-4 w-4 rounded border-gray-300 accent-[#6941c6]"
+                onChange={() => onTeamToggle(member.name)}
+                type="checkbox"
+              />
+              <span className="min-w-0 flex-1">
+                <span className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-sm font-semibold text-gray-900">{member.name}</span>
+                  <Badge tone={member.tone}>{member.status}</Badge>
+                </span>
+                <span className="mt-1 block text-sm text-gray-500">{member.role}</span>
+                <span className="mt-3 block text-sm leading-5 text-gray-600">{member.focus}</span>
+              </span>
+            </label>
+          );
+        })}
+      </div>
+    </Panel>
+  );
+}
+
+function AdminGeneratedPacketPanel({ project }: { project: Project }) {
+  return (
+    <Panel
+      actions={
+        <>
+          <Button icon={RefreshCw} variant="secondary">Regenerate drafts</Button>
+          <Button icon={CheckCircle2}>Approve packet</Button>
+        </>
+      }
+      description="The draft package Baymax creates before design, front end, back end, and data owners spend project time."
+      title="Generated draft packet"
+    >
+      <div className="grid gap-3 lg:grid-cols-2">
+        {project.reportAssets.map((asset) => {
+          const Icon = asset.icon;
+
+          return (
+            <article className="rounded-habibiLg border border-gray-200 bg-white p-4 shadow-habibiXs" key={asset.title}>
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex min-w-0 items-start gap-3">
+                  <div className={["rounded-habibiMd p-2.5", iconBg(asset.tone)].join(" ")}>
+                    <Icon aria-hidden="true" className={["h-4 w-4", iconTone(asset.tone)].join(" ")} />
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="text-sm font-semibold text-gray-900">{asset.title}</h3>
+                    <p className="mt-1 text-xs text-gray-500">{asset.category} - {asset.assignee}</p>
+                  </div>
+                </div>
+                <Badge tone={asset.tone}>{asset.status}</Badge>
+              </div>
+              <p className="mt-3 text-sm leading-5 text-gray-600">{asset.description}</p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Button icon={Eye} size="sm" variant="secondary">Review</Button>
+                <Button icon={Edit3} size="sm" variant="ghost">Edit</Button>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+    </Panel>
+  );
+}
+
+function RedundancyPanel({ project }: { project: Project }) {
+  const designerAssets = project.reportAssets.filter((asset) => asset.assignee === "Gurney").length;
+
+  return (
+    <Panel title="Problem Baymax solves" description="Reduce the number of designers pulled into early discovery before the project is approved.">
+      <div className="grid gap-3">
+        <div className="rounded-habibiMd border border-error-100 bg-error-50 p-4">
+          <p className="text-sm font-semibold text-error-700">Before Baymax</p>
+          <p className="mt-2 text-sm leading-6 text-error-700">
+            PMs ask multiple designers to sit in early calls, repeat discovery questions, and produce speculative
+            sketches before the business confirms the work is worth staffing.
+          </p>
+        </div>
+        <div className="rounded-habibiMd border border-success-100 bg-success-50 p-4">
+          <p className="text-sm font-semibold text-success-700">With Baymax</p>
+          <p className="mt-2 text-sm leading-6 text-success-700">
+            Baymax attends the selected kickoff, creates {designerAssets} designer-ready mockup assets for {project.shortName},
+            routes them for approval, and gives the team a clearer go or no-go packet.
+          </p>
+        </div>
+      </div>
+    </Panel>
+  );
+}
+
+function BusinessHandoffPanel({
+  clearReviewers,
+  project,
+  selectedMeeting,
+  selectedTeam,
+}: {
+  clearReviewers: number;
+  project: Project;
+  selectedMeeting?: MeetingSlot;
+  selectedTeam: string[];
+}) {
+  const teamReady = clearReviewers >= Math.max(1, Math.ceil(selectedTeam.length / 2));
+  const businessTone = project.feasibility === "Red" ? "error" : teamReady ? "success" : "warning";
+
+  return (
+    <Panel
+      actions={<Button icon={Send} variant={project.feasibility === "Red" ? "secondary" : "primary"}>Send to business</Button>}
+      description="Review state before the PM sends Baymax output back to the business."
+      title="Business handoff gate"
+    >
+      <div className="space-y-3">
+        <HandoffRow
+          label="Teams kickoff"
+          meta={selectedMeeting ? `${selectedMeeting.title} - ${selectedMeeting.time}` : "No meeting selected"}
+          tone={selectedMeeting?.botAccess === "Ready" ? "success" : "warning"}
+          value={selectedMeeting?.botAccess ?? "Not selected"}
+        />
+        <HandoffRow
+          label="Team review"
+          meta={`${selectedTeam.length} reviewers can see transcript markers and draft outputs`}
+          tone={teamReady ? "success" : "warning"}
+          value={`${clearReviewers}/${selectedTeam.length || project.team.length} clear`}
+        />
+        <HandoffRow
+          label="Generated packet"
+          meta="Wireframes, architecture map, data pipeline, notes, and open questions"
+          tone={project.reportAssets.length > 3 ? "success" : "info"}
+          value={`${project.reportAssets.length} assets`}
+        />
+        <HandoffRow
+          label="Project decision"
+          meta={project.ownerNote}
+          tone={businessTone}
+          value={project.feasibility}
+        />
+      </div>
+    </Panel>
+  );
+}
+
+function HandoffRow({
+  label,
+  meta,
+  tone,
+  value,
+}: {
+  label: string;
+  meta: string;
+  tone: Tone;
+  value: string;
+}) {
+  return (
+    <div className="rounded-habibiMd border border-gray-200 bg-gray-50 p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm font-semibold text-gray-900">{label}</p>
+        <Badge tone={tone}>{value}</Badge>
+      </div>
+      <p className="mt-2 text-sm leading-5 text-gray-600">{meta}</p>
     </div>
   );
 }
