@@ -10,6 +10,7 @@ import {
   Database,
   Download,
   Edit3,
+  ExternalLink,
   Eye,
   FileText,
   FolderKanban,
@@ -17,6 +18,7 @@ import {
   GitBranch,
   HelpCircle,
   LayoutDashboard,
+  Mail,
   MessageSquareText,
   MonitorDot,
   Paintbrush,
@@ -30,8 +32,10 @@ import {
   Settings,
   ShieldCheck,
   Sparkles,
+  UploadCloud,
   Users,
   Workflow,
+  X,
   type LucideIcon,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -71,15 +75,37 @@ type Question = {
   time: string;
 };
 
+type AssetPreviewMode = "wireframe" | "flow" | "diagram" | "report";
+
+type AssetPreview = {
+  artifactType: string;
+  emailSubject: string;
+  figmaLabel: string;
+  handoffTarget: string;
+  previewMode: AssetPreviewMode;
+  version: string;
+};
+
 type ReportAsset = {
   assignee: string;
   category: string;
   description: string;
   evidence: string;
   icon: LucideIcon;
+  preview?: AssetPreview;
   status: string;
   title: string;
   tone: Tone;
+};
+
+type AssetDeliveryMode = "initial" | "edited";
+
+type AssetReviewState = {
+  deliveryMode: AssetDeliveryMode;
+  email: string;
+  emailSent: boolean;
+  meetingQueued: boolean;
+  uploadedFile?: string;
 };
 
 type TranscriptEvent = {
@@ -387,6 +413,14 @@ const projects: Project[] = [
         description: "Screen inventory, primary flows, states, and review notes extracted from kickoff.",
         evidence: "Transcript markers 15:12, 15:42, 16:09",
         icon: Paintbrush,
+        preview: {
+          artifactType: "Initial wireframe packet",
+          emailSubject: "Baymax Apollo UX/UI kickoff wireframes",
+          figmaLabel: "Open editable Figma draft",
+          handoffTarget: "Apollo discovery kickoff follow-up",
+          previewMode: "wireframe",
+          version: "v0.3",
+        },
         status: "Needs designer review",
         title: "UX/UI kickoff packet",
         tone: "brand",
@@ -397,6 +431,14 @@ const projects: Project[] = [
         description: "Editable flow diagram draft for dashboard screens, generated from user needs and screens mentioned.",
         evidence: "Generated after question Q-014",
         icon: Workflow,
+        preview: {
+          artifactType: "Generated flow asset",
+          emailSubject: "Baymax Apollo project view flow map",
+          figmaLabel: "Open flow in Figma",
+          handoffTarget: "Apollo discovery kickoff follow-up",
+          previewMode: "flow",
+          version: "v0.2",
+        },
         status: "Regenerate available",
         title: "Project view flow map",
         tone: "info",
@@ -885,6 +927,8 @@ export function App() {
   const [activeDiagram, setActiveDiagram] = useState<DiagramId>("ui");
   const [projectDrafts, setProjectDrafts] = useState<Record<string, ProjectDraft>>({});
   const [editMode, setEditMode] = useState(false);
+  const [activeAssetKey, setActiveAssetKey] = useState<string | null>(null);
+  const [assetReviewState, setAssetReviewState] = useState<Record<string, AssetReviewState>>({});
   const [selectedMeetingByProject, setSelectedMeetingByProject] = useState<Record<string, string>>(() =>
     Object.fromEntries(
       projects.map((project) => [
@@ -910,6 +954,16 @@ export function App() {
   );
   const selectedMeetingId = selectedMeetingByProject[activeProject.id] ?? activeMeetings[0]?.id ?? "";
   const selectedTeam = selectedTeamByProject[activeProject.id] ?? activeProject.team.map((member) => member.name);
+  const activeAsset = useMemo(
+    () =>
+      activeAssetKey
+        ? activeProject.reportAssets.find((asset) => getAssetKey(activeProject.id, asset.title) === activeAssetKey)
+        : undefined,
+    [activeAssetKey, activeProject],
+  );
+  const activeAssetState = activeAsset && activeAssetKey
+    ? assetReviewState[activeAssetKey] ?? createDefaultAssetReviewState(activeAsset)
+    : undefined;
   const activeCategoryData = categories.find((category) => category.id === activeCategory) ?? categories[0];
 
   useEffect(() => {
@@ -920,6 +974,7 @@ export function App() {
   function selectProject(projectId: string, view: ViewId = activeView) {
     setActiveProjectId(projectId);
     setActiveView(view);
+    setActiveAssetKey(null);
   }
 
   function updateProjectField<K extends keyof ProjectDraft>(field: K, value: ProjectDraft[K]) {
@@ -961,6 +1016,24 @@ export function App() {
     });
   }
 
+  function openAsset(asset: ReportAsset) {
+    setActiveAssetKey(getAssetKey(activeProject.id, asset.title));
+  }
+
+  function updateActiveAssetState(updates: Partial<AssetReviewState>) {
+    if (!activeAsset || !activeAssetKey) {
+      return;
+    }
+
+    setAssetReviewState((current) => ({
+      ...current,
+      [activeAssetKey]: {
+        ...(current[activeAssetKey] ?? createDefaultAssetReviewState(activeAsset)),
+        ...updates,
+      },
+    }));
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900">
       <div className="mx-auto flex min-h-screen w-full max-w-[1720px] flex-col gap-4 p-3 lg:flex-row lg:p-4">
@@ -975,7 +1048,13 @@ export function App() {
           <Topbar activeProject={activeProject} onProjectChange={(projectId) => selectProject(projectId)} projects={projects} />
           <main className="min-w-0">
             {activeView === "inbox" ? (
-              <InboxView activeProject={activeProject} onProjectChange={selectProject} onViewChange={setActiveView} projects={projects} />
+              <InboxView
+                activeProject={activeProject}
+                onAssetOpen={openAsset}
+                onProjectChange={selectProject}
+                onViewChange={setActiveView}
+                projects={projects}
+              />
             ) : null}
             {activeView === "project" ? (
               <ProjectView
@@ -995,10 +1074,11 @@ export function App() {
             ) : null}
             {activeView === "transcript" ? <TranscriptView project={activeProject} /> : null}
             {activeView === "team" ? <TeamView project={activeProject} /> : null}
-            {activeView === "reports" ? <ReportsView project={activeProject} /> : null}
+            {activeView === "reports" ? <ReportsView onAssetOpen={openAsset} project={activeProject} /> : null}
             {activeView === "admin" ? (
               <AdminView
                 meetings={activeMeetings}
+                onAssetOpen={openAsset}
                 onMeetingChange={selectMeeting}
                 onProjectChange={selectProject}
                 onTeamToggle={toggleTeamMember}
@@ -1012,6 +1092,19 @@ export function App() {
           </main>
         </div>
       </div>
+      {activeAsset && activeAssetKey && activeAssetState ? (
+        <AssetReviewDrawer
+          asset={activeAsset}
+          assetState={activeAssetState}
+          onClose={() => setActiveAssetKey(null)}
+          onDeliveryModeChange={(deliveryMode) => updateActiveAssetState({ deliveryMode })}
+          onEmailChange={(email) => updateActiveAssetState({ email, emailSent: false })}
+          onEmailSend={() => updateActiveAssetState({ emailSent: true })}
+          onMeetingQueue={() => updateActiveAssetState({ meetingQueued: true })}
+          onUpload={(uploadedFile) => updateActiveAssetState({ deliveryMode: "edited", uploadedFile })}
+          project={activeProject}
+        />
+      ) : null}
     </div>
   );
 }
@@ -1157,11 +1250,13 @@ function Topbar({
 
 function InboxView({
   activeProject,
+  onAssetOpen,
   onProjectChange,
   onViewChange,
   projects,
 }: {
   activeProject: Project;
+  onAssetOpen: (asset: ReportAsset) => void;
   onProjectChange: (projectId: string, view?: ViewId) => void;
   onViewChange: (view: ViewId) => void;
   projects: Project[];
@@ -1211,7 +1306,7 @@ function InboxView({
           />
           <div className="grid gap-4 lg:grid-cols-2">
             {designerAssets.map((asset) => (
-              <AssetCard asset={asset} key={asset.title} />
+              <AssetCard asset={asset} key={asset.title} onOpen={() => onAssetOpen(asset)} />
             ))}
           </div>
           <Panel title="Transcript highlights" actions={<Button icon={Eye} onClick={() => onViewChange("transcript")} variant="secondary">Review markers</Button>}>
@@ -1453,7 +1548,7 @@ function TeamView({ project }: { project: Project }) {
   );
 }
 
-function ReportsView({ project }: { project: Project }) {
+function ReportsView({ onAssetOpen, project }: { onAssetOpen: (asset: ReportAsset) => void; project: Project }) {
   const groupedAssets = useMemo(
     () =>
       project.team.map((member) => ({
@@ -1485,7 +1580,7 @@ function ReportsView({ project }: { project: Project }) {
             {assets.length > 0 ? (
               <div className="grid gap-4 lg:grid-cols-2">
                 {assets.map((asset) => (
-                  <AssetCard asset={asset} key={asset.title} />
+                  <AssetCard asset={asset} key={asset.title} onOpen={() => onAssetOpen(asset)} />
                 ))}
               </div>
             ) : (
@@ -1502,6 +1597,7 @@ function ReportsView({ project }: { project: Project }) {
 
 function AdminView({
   meetings,
+  onAssetOpen,
   onMeetingChange,
   onProjectChange,
   onTeamToggle,
@@ -1512,6 +1608,7 @@ function AdminView({
   selectedTeam,
 }: {
   meetings: MeetingSlot[];
+  onAssetOpen: (asset: ReportAsset) => void;
   onMeetingChange: (meetingId: string) => void;
   onProjectChange: (projectId: string, view?: ViewId) => void;
   onTeamToggle: (memberName: string) => void;
@@ -1568,7 +1665,7 @@ function AdminView({
             selectedMeetingId={selectedMeetingId}
           />
           <TeamVisibilityPanel onTeamToggle={onTeamToggle} project={project} selectedTeam={selectedTeam} />
-          <AdminGeneratedPacketPanel project={project} />
+          <AdminGeneratedPacketPanel onAssetOpen={onAssetOpen} project={project} />
         </section>
         <aside className="space-y-4">
           <RedundancyPanel project={project} />
@@ -1769,7 +1866,13 @@ function TeamVisibilityPanel({
   );
 }
 
-function AdminGeneratedPacketPanel({ project }: { project: Project }) {
+function AdminGeneratedPacketPanel({
+  onAssetOpen,
+  project,
+}: {
+  onAssetOpen: (asset: ReportAsset) => void;
+  project: Project;
+}) {
   return (
     <Panel
       actions={
@@ -1801,8 +1904,8 @@ function AdminGeneratedPacketPanel({ project }: { project: Project }) {
               </div>
               <p className="mt-3 text-sm leading-5 text-gray-600">{asset.description}</p>
               <div className="mt-4 flex flex-wrap gap-2">
-                <Button icon={Eye} size="sm" variant="secondary">Review</Button>
-                <Button icon={Edit3} size="sm" variant="ghost">Edit</Button>
+                <Button icon={Eye} onClick={() => onAssetOpen(asset)} size="sm" variant="secondary">Review</Button>
+                <Button icon={Edit3} onClick={() => onAssetOpen(asset)} size="sm" variant="ghost">Edit</Button>
               </div>
             </article>
           );
@@ -2454,7 +2557,7 @@ function SectionHeading({ description, title }: { description: string; title: st
   );
 }
 
-function AssetCard({ asset }: { asset: ReportAsset }) {
+function AssetCard({ asset, onOpen }: { asset: ReportAsset; onOpen: () => void }) {
   const Icon = asset.icon;
 
   return (
@@ -2474,10 +2577,336 @@ function AssetCard({ asset }: { asset: ReportAsset }) {
       <p className="mt-4 text-sm leading-6 text-gray-600">{asset.description}</p>
       <p className="mt-3 rounded-habibiMd bg-gray-50 px-3 py-2 text-xs font-medium text-gray-500">{asset.evidence}</p>
       <div className="mt-5 flex flex-wrap gap-2">
-        <Button icon={Eye} size="sm" variant="secondary">Open</Button>
+        <Button icon={Eye} onClick={onOpen} size="sm" variant="secondary">Open</Button>
         <Button icon={RefreshCw} size="sm" variant="ghost">Regenerate</Button>
       </div>
     </article>
+  );
+}
+
+function AssetReviewDrawer({
+  asset,
+  assetState,
+  onClose,
+  onDeliveryModeChange,
+  onEmailChange,
+  onEmailSend,
+  onMeetingQueue,
+  onUpload,
+  project,
+}: {
+  asset: ReportAsset;
+  assetState: AssetReviewState;
+  onClose: () => void;
+  onDeliveryModeChange: (mode: AssetDeliveryMode) => void;
+  onEmailChange: (email: string) => void;
+  onEmailSend: () => void;
+  onMeetingQueue: () => void;
+  onUpload: (fileName: string) => void;
+  project: Project;
+}) {
+  const preview = getAssetPreview(asset, project);
+  const deliveryLabel =
+    assetState.deliveryMode === "edited" && assetState.uploadedFile
+      ? assetState.uploadedFile
+      : `${preview.version} Baymax initial draft`;
+
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end bg-gray-900/35 p-2 sm:p-4" role="dialog" aria-modal="true" aria-label={`${asset.title} review`}>
+      <div className="flex h-full w-full max-w-[1180px] flex-col overflow-hidden rounded-habibiLg bg-white shadow-2xl">
+        <header className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3 border-b border-gray-200 bg-gray-50 px-5 py-4">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge tone={asset.tone}>{preview.artifactType}</Badge>
+              <Badge tone="neutral">{preview.version}</Badge>
+            </div>
+            <h2 className="mt-2 text-xl font-semibold text-gray-900">{asset.title}</h2>
+            <p className="mt-1 max-w-3xl text-sm leading-6 text-gray-500">{asset.description}</p>
+          </div>
+          <IconButton icon={X} label="Close asset review" onClick={onClose} />
+        </header>
+
+        <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5">
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+            <section className="space-y-4">
+              <Panel
+                actions={<Button icon={Download} variant="secondary">Download preview</Button>}
+                description="Preview what Baymax generated from the Apollo kickoff before sending it outside the dashboard."
+                title="Baymax-generated visual"
+              >
+                <AssetVisualPreview asset={asset} preview={preview} project={project} />
+              </Panel>
+              <Panel title="Source evidence" description="Why Baymax produced this draft.">
+                <div className="grid gap-3 md:grid-cols-3">
+                  <InfoBlock label="Project" value={project.name} />
+                  <InfoBlock label="Owner" value={`${asset.assignee} - ${asset.category}`} />
+                  <InfoBlock label="Transcript evidence" value={asset.evidence} />
+                </div>
+              </Panel>
+            </section>
+
+            <aside className="space-y-4">
+              <Panel title="Send to email" description="Mock email handoff for the generated file.">
+                <div className="space-y-3">
+                  <Field label="Review email address">
+                    <input
+                      className="field-control"
+                      onChange={(event) => onEmailChange(event.target.value)}
+                      type="email"
+                      value={assetState.email}
+                    />
+                  </Field>
+                  <Button icon={Mail} onClick={onEmailSend}>Send to email</Button>
+                  {assetState.emailSent ? (
+                    <div className="rounded-habibiMd border border-success-100 bg-success-50 p-3 text-sm leading-5 text-success-700">
+                      Sent {asset.title} to {assetState.email}.
+                    </div>
+                  ) : null}
+                </div>
+              </Panel>
+
+              <Panel title="Choose review path" description="Use Baymax's first draft or upload your edited version after Figma work.">
+                <div className="grid gap-2">
+                  <button
+                    aria-pressed={assetState.deliveryMode === "initial"}
+                    className={[
+                      "focus-ring rounded-habibiMd border p-3 text-left transition-colors",
+                      assetState.deliveryMode === "initial" ? "border-brand-200 bg-brand-50" : "border-gray-200 bg-white hover:bg-gray-50",
+                    ].join(" ")}
+                    onClick={() => onDeliveryModeChange("initial")}
+                    type="button"
+                  >
+                    <span className="block text-sm font-semibold text-gray-900">Send Baymax initial mockup</span>
+                    <span className="mt-1 block text-sm leading-5 text-gray-500">Use the generated draft without designer edits.</span>
+                  </button>
+                  <button
+                    aria-pressed={assetState.deliveryMode === "edited"}
+                    className={[
+                      "focus-ring rounded-habibiMd border p-3 text-left transition-colors",
+                      assetState.deliveryMode === "edited" ? "border-brand-200 bg-brand-50" : "border-gray-200 bg-white hover:bg-gray-50",
+                    ].join(" ")}
+                    onClick={() => onDeliveryModeChange("edited")}
+                    type="button"
+                  >
+                    <span className="block text-sm font-semibold text-gray-900">Upload my edited file</span>
+                    <span className="mt-1 block text-sm leading-5 text-gray-500">Attach a Figma export, PDF, image, or notes file for Baymax to send.</span>
+                  </button>
+                </div>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <Button icon={ExternalLink} variant="secondary">{preview.figmaLabel}</Button>
+                  <label className="focus-within:shadow-[var(--habibi-focus-ring)] inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-habibiMd border border-gray-300 bg-white px-4 text-sm font-semibold text-gray-700 shadow-habibiXs hover:bg-gray-50">
+                    <UploadCloud aria-hidden="true" className="h-4 w-4" />
+                    Upload edited file
+                    <input
+                      aria-label="Upload edited Apollo file"
+                      className="sr-only"
+                      onChange={(event) => {
+                        const file = event.target.files?.[0];
+                        if (file) {
+                          onUpload(file.name);
+                        }
+                      }}
+                      type="file"
+                    />
+                  </label>
+                </div>
+                {assetState.uploadedFile ? (
+                  <div className="mt-3 rounded-habibiMd border border-info-100 bg-info-50 p-3 text-sm leading-5 text-info-700">
+                    Uploaded {assetState.uploadedFile}. Baymax will use this edited version.
+                  </div>
+                ) : null}
+              </Panel>
+
+              <Panel title="Send into meeting" description="Queue the selected version for the next Teams meeting or business handoff.">
+                <div className="space-y-3">
+                  <HandoffRow label="Selected version" meta={deliveryLabel} tone={assetState.deliveryMode === "edited" ? "info" : "brand"} value={assetState.deliveryMode === "edited" ? "Edited" : "Initial"} />
+                  <HandoffRow label="Target" meta={preview.handoffTarget} tone="neutral" value="Teams packet" />
+                  <Button icon={Send} onClick={onMeetingQueue}>Send selected version</Button>
+                  {assetState.meetingQueued ? (
+                    <div className="rounded-habibiMd border border-success-100 bg-success-50 p-3 text-sm leading-5 text-success-700">
+                      Queued for {preview.handoffTarget}. Baymax will include it with the meeting packet.
+                    </div>
+                  ) : null}
+                </div>
+              </Panel>
+            </aside>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AssetVisualPreview({
+  asset,
+  preview,
+  project,
+}: {
+  asset: ReportAsset;
+  preview: AssetPreview;
+  project: Project;
+}) {
+  if (preview.previewMode === "wireframe") {
+    return <ApolloWireframePreview project={project} />;
+  }
+
+  if (preview.previewMode === "flow") {
+    return <FlowAssetPreview project={project} />;
+  }
+
+  return <GenericAssetPreview asset={asset} preview={preview} project={project} />;
+}
+
+function ApolloWireframePreview({ project }: { project: Project }) {
+  return (
+    <div className="rounded-habibiLg border border-gray-200 bg-gray-100 p-4">
+      <div className="rounded-habibiLg border border-gray-300 bg-white shadow-habibiXs">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 px-4 py-3">
+          <div>
+            <p className="text-xs font-semibold uppercase text-brand-700">Baymax wireframe</p>
+            <h3 className="text-sm font-semibold text-gray-900">{project.shortName} initial dashboard concept</h3>
+          </div>
+          <div className="flex gap-1.5">
+            <span className="h-2.5 w-2.5 rounded-full bg-error-500" />
+            <span className="h-2.5 w-2.5 rounded-full bg-warning-500" />
+            <span className="h-2.5 w-2.5 rounded-full bg-success-500" />
+          </div>
+        </div>
+        <div className="grid gap-0 lg:grid-cols-[180px_minmax(0,1fr)]">
+          <aside className="border-b border-gray-200 bg-gray-50 p-4 lg:border-b-0 lg:border-r">
+            <div className="mb-5 h-9 w-9 rounded-habibiMd bg-brand-700" />
+            <div className="space-y-2">
+              {["Admin command", "Designer review", "Transcripts", "Review packets"].map((item, index) => (
+                <div className={["h-8 rounded-habibiMd", index === 1 ? "bg-brand-100" : "bg-gray-200"].join(" ")} key={item}>
+                  <span className="sr-only">{item}</span>
+                </div>
+              ))}
+            </div>
+          </aside>
+          <main className="p-4">
+            <div className="mb-4 grid gap-3 md:grid-cols-4">
+              {["Meeting ready", "4 reviewers", "5 assets", "Yellow gate"].map((label) => (
+                <div className="rounded-habibiMd border border-gray-200 bg-gray-50 p-3" key={label}>
+                  <div className="h-2 w-16 rounded-full bg-gray-300" />
+                  <p className="mt-3 text-xs font-semibold text-gray-600">{label}</p>
+                </div>
+              ))}
+            </div>
+            <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_260px]">
+              <section className="space-y-4">
+                <WireframeBlock title="Generated screen flow" />
+                <div className="grid gap-3 md:grid-cols-3">
+                  <MiniWireframeScreen title="Admin sends bot" tone="brand" />
+                  <MiniWireframeScreen title="Designer approves" tone="warning" />
+                  <MiniWireframeScreen title="Business handoff" tone="success" />
+                </div>
+                <WireframeBlock title="Transcript-backed questions" />
+              </section>
+              <aside className="space-y-3">
+                <MiniWireframePanel label="Email preview" />
+                <MiniWireframePanel label="Upload edited file" />
+                <MiniWireframePanel label="Send to meeting" />
+              </aside>
+            </div>
+          </main>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FlowAssetPreview({ project }: { project: Project }) {
+  const steps = ["Kickoff capture", "Baymax questions", "Wireframe draft", "Designer approval", "Meeting packet"];
+
+  return (
+    <div className="rounded-habibiLg border border-info-100 bg-info-50 p-5">
+      <div className="grid gap-3 lg:grid-cols-5">
+        {steps.map((step, index) => (
+          <div className="flex items-center gap-3" key={step}>
+            <div className="min-h-32 flex-1 rounded-habibiMd border border-info-100 bg-white p-4 shadow-habibiXs">
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-info-50 text-xs font-semibold text-info-700">
+                {index + 1}
+              </span>
+              <h3 className="mt-4 text-sm font-semibold text-gray-900">{step}</h3>
+              <p className="mt-2 text-xs leading-5 text-gray-500">{project.shortName} asset path</p>
+            </div>
+            {index < steps.length - 1 ? <ChevronRight aria-hidden="true" className="hidden h-5 w-5 text-info-600 lg:block" /> : null}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function GenericAssetPreview({
+  asset,
+  preview,
+  project,
+}: {
+  asset: ReportAsset;
+  preview: AssetPreview;
+  project: Project;
+}) {
+  return (
+    <div className="rounded-habibiLg border border-gray-200 bg-gray-50 p-5">
+      <div className="mx-auto max-w-2xl rounded-habibiLg border border-gray-200 bg-white p-6 shadow-habibiXs">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold uppercase text-brand-700">{preview.artifactType}</p>
+            <h3 className="mt-2 text-lg font-semibold text-gray-900">{asset.title}</h3>
+            <p className="mt-2 text-sm leading-6 text-gray-500">{project.name}</p>
+          </div>
+          <Badge tone={asset.tone}>{asset.status}</Badge>
+        </div>
+        <div className="mt-6 space-y-3">
+          <div className="h-3 w-4/5 rounded-full bg-gray-200" />
+          <div className="h-3 w-full rounded-full bg-gray-200" />
+          <div className="h-3 w-2/3 rounded-full bg-gray-200" />
+        </div>
+        <div className="mt-6 grid gap-3 md:grid-cols-2">
+          <MiniWireframePanel label={asset.category} />
+          <MiniWireframePanel label={asset.assignee} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function WireframeBlock({ title }: { title: string }) {
+  return (
+    <div className="rounded-habibiMd border border-gray-200 bg-white p-4">
+      <p className="text-xs font-semibold uppercase text-gray-500">{title}</p>
+      <div className="mt-4 space-y-2">
+        <div className="h-3 w-4/5 rounded-full bg-gray-200" />
+        <div className="h-3 w-full rounded-full bg-gray-200" />
+        <div className="h-3 w-2/3 rounded-full bg-gray-200" />
+      </div>
+    </div>
+  );
+}
+
+function MiniWireframeScreen({ title, tone }: { title: string; tone: Tone }) {
+  return (
+    <div className="min-h-36 rounded-habibiMd border border-gray-200 bg-white p-3">
+      <div className={["mb-3 h-12 rounded-habibiMd", iconBg(tone)].join(" ")} />
+      <p className="text-xs font-semibold text-gray-700">{title}</p>
+      <div className="mt-3 space-y-2">
+        <div className="h-2 rounded-full bg-gray-200" />
+        <div className="h-2 w-3/4 rounded-full bg-gray-200" />
+      </div>
+    </div>
+  );
+}
+
+function MiniWireframePanel({ label }: { label: string }) {
+  return (
+    <div className="rounded-habibiMd border border-gray-200 bg-gray-50 p-3">
+      <p className="text-xs font-semibold text-gray-500">{label}</p>
+      <div className="mt-3 space-y-2">
+        <div className="h-2 rounded-full bg-gray-200" />
+        <div className="h-2 w-2/3 rounded-full bg-gray-200" />
+      </div>
+    </div>
   );
 }
 
@@ -2652,11 +3081,12 @@ function StatusDot({ tone = "success" }: { tone?: Tone }) {
   return <span aria-hidden="true" className={["mt-1 h-2.5 w-2.5 shrink-0 rounded-full", dotTone(tone)].join(" ")} />;
 }
 
-function IconButton({ icon: Icon, label }: { icon: LucideIcon; label: string }) {
+function IconButton({ icon: Icon, label, onClick }: { icon: LucideIcon; label: string; onClick?: () => void }) {
   return (
     <button
       aria-label={label}
       className="focus-ring flex h-10 w-10 items-center justify-center rounded-habibiMd text-gray-500 hover:bg-gray-50 hover:text-gray-900"
+      onClick={onClick}
       type="button"
     >
       <Icon aria-hidden="true" className="h-5 w-5" />
@@ -2711,6 +3141,41 @@ function statusTone(status: ProjectStatus): Tone {
     return "info";
   }
   return "warning";
+}
+
+function getAssetKey(projectId: string, assetTitle: string) {
+  return `${projectId}::${assetTitle}`;
+}
+
+function createDefaultAssetReviewState(asset: ReportAsset): AssetReviewState {
+  return {
+    deliveryMode: "initial",
+    email: asset.assignee === "Gurney" ? "gurney@company.com" : "reviewer@company.com",
+    emailSent: false,
+    meetingQueued: false,
+  };
+}
+
+function getAssetPreview(asset: ReportAsset, project: Project): AssetPreview {
+  if (asset.preview) {
+    return asset.preview;
+  }
+
+  const category = asset.category.toLowerCase();
+  const previewMode: AssetPreviewMode = category.includes("architecture") || category.includes("data")
+    ? "diagram"
+    : category.includes("ux") || category.includes("visual")
+      ? "wireframe"
+      : "report";
+
+  return {
+    artifactType: category.includes("data") ? "Data diagram" : category.includes("architecture") ? "Architecture diagram" : "Generated asset",
+    emailSubject: `Baymax ${project.shortName} ${asset.title}`,
+    figmaLabel: "Open editable draft",
+    handoffTarget: `${project.shortName} next Teams meeting`,
+    previewMode,
+    version: "v0.1",
+  };
 }
 
 function badgeTone(tone: Tone) {
