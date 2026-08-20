@@ -156,6 +156,23 @@ type FlowStage = {
   tone: Tone;
 };
 
+type ProjectInsight = {
+  capability: string;
+  capabilityBrief: string;
+  confidence: number;
+  difficulty: string;
+  difficultyBrief: string;
+  difficultyTone: Tone;
+  headline: string;
+  issues: string[];
+  recommendation: string;
+  scope: string;
+  scopeBrief: string;
+  timeline: string;
+  timelineBrief: string;
+  timelineTone: Tone;
+};
+
 type Project = {
   actionQueue: ActionItem[];
   botState: string;
@@ -1464,7 +1481,7 @@ function ProjectView({
       />
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
-        <section className="space-y-4">
+        <section className="min-w-0 space-y-4">
           <ProjectSummaryPanel project={project} />
           <TechnicalBreakdown
             activeCategory={activeCategory}
@@ -1475,7 +1492,7 @@ function ProjectView({
           <DiagramPanel activeDiagram={activeDiagram} onDiagramChange={onDiagramChange} project={project} />
           <QuestionsLog project={project} />
         </section>
-        <aside className="space-y-4">
+        <aside className="min-w-0 space-y-4">
           <LiveMonitorPanel project={project} />
           <FlagsPanel project={project} />
         </aside>
@@ -2157,36 +2174,205 @@ function ProjectEditPanel({
 }
 
 function ProjectSummaryPanel({ project }: { project: Project }) {
+  const [insightOpen, setInsightOpen] = useState(false);
+  const insight = getProjectInsight(project);
+
   return (
-    <Panel title="Project summary" description="Status, feasibility, last update, project scope, and review state.">
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_260px]">
-        <div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge tone={feasibilityTone(project.feasibility)}>Feasibility {project.feasibility}</Badge>
-            <Badge tone={project.botState === "Paused" ? "warning" : "success"}>{project.botState}</Badge>
-            <Badge tone={statusTone(project.status)}>{project.status}</Badge>
+    <>
+      <Panel
+        actions={<Button icon={Eye} onClick={() => setInsightOpen(true)} variant="secondary">Expand insight</Button>}
+        title="Baymax insight summary"
+        description="Scope, timeline, difficulty, issues, and capability read from the kickoff capture."
+      >
+        <div className="min-w-0 space-y-4">
+          <div className="min-w-0 space-y-4">
+            <div className="rounded-habibiLg border border-brand-100 bg-brand-50 p-5">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge tone={feasibilityTone(project.feasibility)}>Feasibility {project.feasibility}</Badge>
+                <Badge tone={project.botState === "Paused" ? "warning" : "success"}>{project.botState}</Badge>
+                <Badge tone={statusTone(project.status)}>{project.status}</Badge>
+              </div>
+              <p className="mt-4 text-base font-semibold leading-7 text-gray-900">{insight.headline}</p>
+              <p className="mt-2 text-sm leading-6 text-gray-600">{insight.recommendation}</p>
+            </div>
+
+            <div className="grid min-w-0 gap-3 sm:grid-cols-2">
+              <InsightMetricCard icon={Workflow} label="Scope" tone="brand" value={insight.scopeBrief} />
+              <InsightMetricCard icon={Clock3} label="Timeline" tone={insight.timelineTone} value={insight.timelineBrief} />
+              <InsightMetricCard icon={Gauge} label="Difficulty" tone={insight.difficultyTone} value={insight.difficultyBrief} />
+              <InsightMetricCard icon={Users} label="Capability" tone={feasibilityTone(project.feasibility)} value={insight.capabilityBrief} />
+            </div>
+
+            <div className="rounded-habibiLg border border-gray-200 bg-gray-50 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-gray-900">Open issues Baymax is watching</p>
+                  <p className="mt-1 text-sm text-gray-500">Brief blockers or unknowns before business handoff.</p>
+                </div>
+                <Badge tone={project.openRisks > 2 ? "error" : "warning"}>{project.openRisks} open risks</Badge>
+              </div>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {insight.issues.map((issue) => (
+                  <span className="max-w-full break-words rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-600" key={issue}>
+                    {issue}
+                  </span>
+                ))}
+              </div>
+            </div>
           </div>
-          <p className="mt-4 text-sm leading-6 text-gray-600">{project.summary}</p>
-          <div className="mt-5 grid gap-3 sm:grid-cols-3">
-            <InlineMetric label="Last update" value={project.lastSynced} />
-            <InlineMetric label="Reviewers" value={`${project.team.length} active`} />
-            <InlineMetric label="Open risks" value={String(project.openRisks)} />
+
+          <div className="min-w-0 rounded-habibiLg border border-gray-200 bg-gray-50 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm font-semibold text-gray-900">Team readiness</p>
+              <Badge tone={feasibilityTone(project.feasibility)}>{insight.confidence}% confidence</Badge>
+            </div>
+            <div className="mt-4 flex -space-x-2">
+              {project.team.map((member) => (
+                <Avatar initials={member.initials} key={member.name} label={member.name} status={member.status === "Blocked" ? "away" : "online"} />
+              ))}
+            </div>
+            <div className="mt-5 space-y-3">
+              <Progress label="Transcript reviewed" value={project.transcriptCoverage} />
+              <Progress label="Capability profile" value={Math.max(22, 100 - project.openRisks * 18)} tone={feasibilityTone(project.feasibility)} />
+              <Progress label="Baymax confidence" value={insight.confidence} tone={insight.difficultyTone} />
+            </div>
+            <div className="mt-5 grid gap-3">
+              <InlineMetric label="Last update" value={project.lastSynced} />
+              <InlineMetric label="Reviewers" value={`${project.team.length} active`} />
+            </div>
           </div>
         </div>
-        <div className="rounded-habibiMd border border-gray-200 bg-gray-50 p-4">
-          <p className="text-sm font-semibold text-gray-900">Attached team</p>
-          <div className="mt-4 flex -space-x-2">
-            {project.team.map((member) => (
-              <Avatar initials={member.initials} key={member.name} label={member.name} status={member.status === "Blocked" ? "away" : "online"} />
-            ))}
+      </Panel>
+
+      {insightOpen ? <ProjectInsightModal insight={insight} onClose={() => setInsightOpen(false)} project={project} /> : null}
+    </>
+  );
+}
+
+function InsightMetricCard({
+  icon: Icon,
+  label,
+  tone,
+  value,
+}: {
+  icon: LucideIcon;
+  label: string;
+  tone: Tone;
+  value: string;
+}) {
+  return (
+    <article className="min-w-0 rounded-habibiLg border border-gray-200 bg-white p-4 shadow-habibiXs">
+      <div className="flex items-start gap-3">
+        <div className={["shrink-0 rounded-habibiMd p-2", iconBg(tone)].join(" ")}>
+          <Icon aria-hidden="true" className={["h-4 w-4", iconTone(tone)].join(" ")} />
+        </div>
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase text-gray-500">{label}</p>
+          <p className="mt-1 break-words text-sm font-semibold leading-5 text-gray-900">{value}</p>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function ProjectInsightModal({
+  insight,
+  onClose,
+  project,
+}: {
+  insight: ProjectInsight;
+  onClose: () => void;
+  project: Project;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 p-3" role="dialog" aria-modal="true" aria-label={`${project.name} Baymax insight`}>
+      <div className="max-h-[92vh] w-full min-w-0 max-w-5xl overflow-hidden rounded-habibiLg bg-white shadow-2xl">
+        <header className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-4 border-b border-gray-200 bg-gray-50 px-5 py-4">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge tone={feasibilityTone(project.feasibility)}>Feasibility {project.feasibility}</Badge>
+              <Badge tone={insight.difficultyTone}>{insight.difficulty}</Badge>
+              <Badge tone="info">{insight.confidence}% confidence</Badge>
+            </div>
+            <h2 className="mt-2 text-xl font-semibold text-gray-900">{project.name} Baymax insight</h2>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-gray-500">{insight.headline}</p>
           </div>
-          <div className="mt-4 space-y-2">
-            <Progress label="Transcript reviewed" value={project.transcriptCoverage} />
-            <Progress label="Capability profile" value={Math.max(22, 100 - project.openRisks * 18)} tone={feasibilityTone(project.feasibility)} />
+          <IconButton icon={X} label="Close project insight" onClick={onClose} />
+        </header>
+
+        <div className="max-h-[calc(92vh-110px)] overflow-y-auto p-5">
+          <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+            <section className="min-w-0 space-y-4">
+              <div className="grid min-w-0 gap-3 md:grid-cols-2">
+                <InsightDetailBlock icon={Workflow} label="Scope read" tone="brand" value={insight.scope} />
+                <InsightDetailBlock icon={Clock3} label="Timeline read" tone={insight.timelineTone} value={insight.timeline} />
+                <InsightDetailBlock icon={Gauge} label="Difficulty read" tone={insight.difficultyTone} value={insight.difficulty} />
+                <InsightDetailBlock icon={Users} label="Capability read" tone={feasibilityTone(project.feasibility)} value={insight.capability} />
+              </div>
+
+              <Panel title="Baymax recommendation" description="Decision guidance before sending the project packet back to the business.">
+                <p className="text-sm leading-6 text-gray-700">{insight.recommendation}</p>
+              </Panel>
+
+              <Panel title="Issues and unknowns" description="Items Baymax would keep asking about in kickoff or follow-up meetings.">
+                <div className="grid gap-3 md:grid-cols-2">
+                  {insight.issues.map((issue) => (
+                    <div className="flex items-start gap-3 rounded-habibiMd border border-gray-200 bg-gray-50 p-3" key={issue}>
+                      <StatusDot tone="warning" />
+                      <p className="text-sm leading-5 text-gray-700">{issue}</p>
+                    </div>
+                  ))}
+                </div>
+              </Panel>
+            </section>
+
+            <aside className="min-w-0 space-y-4">
+              <Panel title="Confidence profile">
+                <div className="space-y-4">
+                  <Progress label="Scope clarity" value={project.transcriptCoverage} tone="brand" />
+                  <Progress label="Team capability" value={Math.max(22, 100 - project.openRisks * 18)} tone={feasibilityTone(project.feasibility)} />
+                  <Progress label="Delivery confidence" value={insight.confidence} tone={insight.difficultyTone} />
+                </div>
+              </Panel>
+              <Panel title="Project facts">
+                <div className="grid gap-3">
+                  <InlineMetric label="Status" value={project.status} />
+                  <InlineMetric label="Bot state" value={project.botState} />
+                  <InlineMetric label="Open risks" value={String(project.openRisks)} />
+                  <InlineMetric label="Generated assets" value={String(project.reportAssets.length)} />
+                </div>
+              </Panel>
+            </aside>
           </div>
         </div>
       </div>
-    </Panel>
+    </div>
+  );
+}
+
+function InsightDetailBlock({
+  icon: Icon,
+  label,
+  tone,
+  value,
+}: {
+  icon: LucideIcon;
+  label: string;
+  tone: Tone;
+  value: string;
+}) {
+  return (
+    <article className="min-w-0 rounded-habibiLg border border-gray-200 bg-white p-5 shadow-habibiXs">
+      <div className="flex items-start gap-3">
+        <div className={["rounded-habibiMd p-2.5", iconBg(tone)].join(" ")}>
+          <Icon aria-hidden="true" className={["h-5 w-5", iconTone(tone)].join(" ")} />
+        </div>
+        <div>
+          <h3 className="text-sm font-semibold text-gray-900">{label}</h3>
+          <p className="mt-2 break-words text-sm leading-6 text-gray-600">{value}</p>
+        </div>
+      </div>
+    </article>
   );
 }
 
@@ -2303,7 +2489,7 @@ function QuestionsLog({ project }: { project: Project }) {
   return (
     <Panel title="Questions log" description="Asked, pending, and team-requested questions with transcript anchors.">
       <div className="overflow-x-auto rounded-habibiMd border border-gray-200">
-        <table className="w-full min-w-[680px] border-collapse text-left text-sm">
+        <table className="w-full min-w-[620px] border-collapse text-left text-sm">
           <thead className="bg-gray-50 text-xs font-semibold uppercase text-gray-500">
             <tr>
               <th className="px-4 py-3" scope="col">Time</th>
@@ -2535,13 +2721,13 @@ function Panel({
   title: string;
 }) {
   return (
-    <section className="overflow-hidden rounded-habibiLg border border-gray-200 bg-white shadow-habibiXs">
+    <section className="min-w-0 overflow-hidden rounded-habibiLg border border-gray-200 bg-white shadow-habibiXs">
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-gray-200 bg-gray-50 px-5 py-4">
-        <div>
+        <div className="min-w-0">
           <h2 className="text-sm font-semibold text-gray-900">{title}</h2>
           {description ? <p className="mt-1 text-sm leading-5 text-gray-500">{description}</p> : null}
         </div>
-        {actions ? <div className="flex flex-wrap gap-2">{actions}</div> : null}
+        {actions ? <div className="flex min-w-0 flex-wrap gap-2">{actions}</div> : null}
       </div>
       <div className="p-5">{children}</div>
     </section>
@@ -3199,6 +3385,92 @@ function statusTone(status: ProjectStatus): Tone {
     return "info";
   }
   return "warning";
+}
+
+function getProjectInsight(project: Project): ProjectInsight {
+  if (project.id === "apollo") {
+    return {
+      capability:
+        "Strong design and front-end fit; architecture and data retention need one owner decision before approval.",
+      capabilityBrief: "Strong UX/front-end fit; data ownership still needs one answer.",
+      confidence: 74,
+      difficulty: "Medium complexity",
+      difficultyBrief: "Medium: clear UI flow, moderate Teams/data decisions.",
+      difficultyTone: "warning",
+      headline:
+        "Baymax sees Apollo as a focused pilot: the dashboard and designer handoff are clear, but Teams permissions and transcript retention should be resolved before business approval.",
+      issues: [
+        "Confirm Teams bot permissions for selected kickoff meetings",
+        "Lock transcript retention and generated-report access rules",
+        "Clarify whether Bot Framework events, Graph subscriptions, or both are needed",
+        "Validate that the first wireframe packet is enough for business sign-off",
+      ],
+      recommendation:
+        "Proceed as a yellow feasibility pilot. Baymax can reduce redundant discovery work immediately by generating the first UX packet, but the project should not move to full delivery until data retention and integration ownership are confirmed.",
+      scope:
+        "Admin command center, designer review queue, Teams meeting capture, transcript markers, generated wireframes, diagrams, and business handoff packet.",
+      scopeBrief: "Dashboard pilot with Teams capture, designer review, and UX packet.",
+      timeline:
+        "2-3 weeks for discovery, clickable prototype, and review packet; 4-6 weeks if Teams integration and data policy are included in the first pilot.",
+      timelineBrief: "2-3 week design pilot; 4-6 weeks with Teams/data hardening.",
+      timelineTone: "warning",
+    };
+  }
+
+  if (project.id === "meridian") {
+    return {
+      capability:
+        "Team profile looks healthy; UX and front-end can move quickly while back end confirms the order source.",
+      capabilityBrief: "Team coverage looks healthy; back end only needs source truth.",
+      confidence: 86,
+      difficulty: "Low-medium complexity",
+      difficultyBrief: "Low-medium: scoped flow with a few integration checks.",
+      difficultyTone: "success",
+      headline:
+        "Baymax sees Meridian as the cleanest pilot candidate because the customer portal flow is scoped and most review owners are already clear.",
+      issues: [
+        "Confirm source of truth for order status",
+        "Decide whether mobile exception review is in the first demo",
+        "Validate customer-facing copy and accessibility states",
+      ],
+      recommendation:
+        "Proceed as a green pilot. Baymax can generate a useful first packet with low rework risk, then route only source-of-truth questions to the technical team.",
+      scope:
+        "Customer order tracking, exception review, mobile operations flow, dashboard tables, and CRM/ERP dependency notes.",
+      scopeBrief: "Customer portal flow, exceptions, mobile view, and CRM/ERP notes.",
+      timeline:
+        "1-2 weeks for reviewable prototype and stakeholder packet; 3-4 weeks if ERP integration details must be demonstrated.",
+      timelineBrief: "1-2 week prototype; 3-4 weeks with ERP details.",
+      timelineTone: "success",
+    };
+  }
+
+  return {
+    capability:
+      "UX can sketch the blocked-state view, but data ownership and governance are not ready for delivery.",
+    capabilityBrief: "UX can mock risk views; governance is not ready for delivery.",
+    confidence: 48,
+    difficulty: "High complexity",
+    difficultyBrief: "High: leadership data and governance are unresolved.",
+    difficultyTone: "error",
+    headline:
+      "Baymax sees Atlas as a leadership-visibility concept that should stay paused until governance, warehouse ownership, and BI export scope are decided.",
+    issues: [
+      "Assign warehouse owner for meeting-derived project records",
+      "Approve retention and PII review process",
+      "Decide whether BI export belongs in the first pilot",
+      "Define leadership approval gates before generated reports are shared",
+    ],
+    recommendation:
+      "Hold as red feasibility. Baymax can still create a leadership risk mockup, but the business packet should explain blockers rather than imply the delivery team is ready.",
+    scope:
+      "Leadership risk overview, governance workflow, warehouse dependency map, BI export considerations, and data-access approval states.",
+    scopeBrief: "Leadership risk view, governance workflow, warehouse map, BI export.",
+    timeline:
+      "Unknown until ownership is assigned; likely 4-8 weeks after governance decisions are complete.",
+    timelineBrief: "Unknown until owners are assigned; likely 4-8 weeks after.",
+    timelineTone: "error",
+  };
 }
 
 function getAssetKey(projectId: string, assetTitle: string) {
