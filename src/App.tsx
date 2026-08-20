@@ -2758,10 +2758,18 @@ function AssetVisualPreview({
 }
 
 function ApolloWireframePreview({ project }: { project: Project }) {
+  const navItems = ["Command", "Review", "Transcript", "Packets"];
+  const metrics = [
+    { label: "Meeting", tone: "success" as Tone, value: "Ready" },
+    { label: "Reviewers", tone: "brand" as Tone, value: "4 active" },
+    { label: "Assets", tone: "info" as Tone, value: "5 drafts" },
+    { label: "Gate", tone: "warning" as Tone, value: "Yellow" },
+  ];
+
   return (
-    <div className="rounded-habibiLg border border-gray-200 bg-gray-100 p-4">
-      <div className="rounded-habibiLg border border-gray-300 bg-white shadow-habibiXs">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 px-4 py-3">
+    <div className="rounded-habibiLg border border-gray-200 bg-gray-100 p-3 sm:p-5">
+      <div className="overflow-hidden rounded-habibiLg border border-gray-300 bg-white shadow-habibiXs">
+        <div className="flex items-center justify-between gap-4 border-b border-gray-200 px-4 py-3">
           <div>
             <p className="text-xs font-semibold uppercase text-brand-700">Baymax wireframe</p>
             <h3 className="text-sm font-semibold text-gray-900">{project.shortName} initial dashboard concept</h3>
@@ -2772,45 +2780,73 @@ function ApolloWireframePreview({ project }: { project: Project }) {
             <span className="h-2.5 w-2.5 rounded-full bg-success-500" />
           </div>
         </div>
-        <div className="grid gap-0 lg:grid-cols-[180px_minmax(0,1fr)]">
-          <aside className="border-b border-gray-200 bg-gray-50 p-4 lg:border-b-0 lg:border-r">
-            <div className="mb-5 h-9 w-9 rounded-habibiMd bg-brand-700" />
-            <div className="space-y-2">
-              {["Admin command", "Designer review", "Transcripts", "Review packets"].map((item, index) => (
-                <div className={["h-8 rounded-habibiMd", index === 1 ? "bg-brand-100" : "bg-gray-200"].join(" ")} key={item}>
-                  <span className="sr-only">{item}</span>
+        <div className="grid min-h-[520px] lg:grid-cols-[136px_minmax(0,1fr)]">
+          <aside className="flex flex-col border-b border-gray-200 bg-gray-50 p-3 lg:border-b-0 lg:border-r">
+            <div className="mb-4 flex items-center gap-2">
+              <div className="h-8 w-8 rounded-habibiMd bg-brand-700" />
+              <div className="min-w-0 flex-1">
+                <div className="h-2.5 w-16 rounded-full bg-gray-300" />
+                <div className="mt-1.5 h-2 w-10 rounded-full bg-gray-200" />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              {navItems.map((item, index) => (
+                <div
+                  className={[
+                    "grid grid-cols-[14px_minmax(0,1fr)] items-center gap-2 rounded-habibiMd px-2 py-2",
+                    index === 1 ? "bg-brand-50" : "bg-white",
+                  ].join(" ")}
+                  key={item}
+                >
+                  <span className={["h-2.5 w-2.5 rounded-full", index === 1 ? "bg-brand-700" : "bg-gray-300"].join(" ")} />
+                  <span className={["h-2 rounded-full", index === 1 ? "bg-brand-200" : "bg-gray-200"].join(" ")} />
                 </div>
               ))}
+            </div>
+            <div className="mt-auto hidden rounded-habibiMd border border-gray-200 bg-white p-2 lg:block">
+              <div className="h-2 w-14 rounded-full bg-gray-200" />
+              <div className="mt-2 h-6 rounded-habibiSm bg-gray-100" />
             </div>
           </aside>
-          <main className="p-4">
-            <div className="mb-4 grid gap-3 md:grid-cols-4">
-              {["Meeting ready", "4 reviewers", "5 assets", "Yellow gate"].map((label) => (
-                <div className="rounded-habibiMd border border-gray-200 bg-gray-50 p-3" key={label}>
-                  <div className="h-2 w-16 rounded-full bg-gray-300" />
-                  <p className="mt-3 text-xs font-semibold text-gray-600">{label}</p>
-                </div>
+          <main className="bg-white p-4">
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+              {metrics.map((metric) => (
+                <PreviewMetric key={metric.label} label={metric.label} tone={metric.tone} value={metric.value} />
               ))}
             </div>
-            <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_260px]">
-              <section className="space-y-4">
-                <WireframeBlock title="Generated screen flow" />
+
+            <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_230px]">
+              <section className="space-y-3">
+                <WireframeBlock title="Designer review queue" />
                 <div className="grid gap-3 md:grid-cols-3">
-                  <MiniWireframeScreen title="Admin sends bot" tone="brand" />
-                  <MiniWireframeScreen title="Designer approves" tone="warning" />
-                  <MiniWireframeScreen title="Business handoff" tone="success" />
+                  <MiniWireframeScreen title="Bot draft" tone="brand" />
+                  <MiniWireframeScreen title="Design edit" tone="warning" />
+                  <MiniWireframeScreen title="Approved" tone="success" />
                 </div>
-                <WireframeBlock title="Transcript-backed questions" />
+                <WireframeBlock title="Transcript-backed questions" compact />
               </section>
-              <aside className="space-y-3">
-                <MiniWireframePanel label="Email preview" />
-                <MiniWireframePanel label="Upload edited file" />
-                <MiniWireframePanel label="Send to meeting" />
+              <aside className="grid gap-3">
+                <MiniWireframePanel label="Email handoff" tone="success" />
+                <MiniWireframePanel label="Edited upload" tone="info" />
+                <MiniWireframePanel label="Meeting packet" tone="brand" />
               </aside>
             </div>
           </main>
         </div>
       </div>
+    </div>
+  );
+}
+
+function PreviewMetric({ label, tone, value }: { label: string; tone: Tone; value: string }) {
+  return (
+    <div className="rounded-habibiMd border border-gray-200 bg-gray-50 p-3">
+      <div className="flex items-center justify-between gap-2">
+        <div className="h-2 w-12 rounded-full bg-gray-200" />
+        <StatusDot tone={tone} />
+      </div>
+      <p className="mt-3 text-xs font-semibold text-gray-500">{label}</p>
+      <p className="mt-1 text-sm font-semibold text-gray-900">{value}</p>
     </div>
   );
 }
@@ -2872,14 +2908,30 @@ function GenericAssetPreview({
   );
 }
 
-function WireframeBlock({ title }: { title: string }) {
+function WireframeBlock({ compact = false, title }: { compact?: boolean; title: string }) {
   return (
-    <div className="rounded-habibiMd border border-gray-200 bg-white p-4">
-      <p className="text-xs font-semibold uppercase text-gray-500">{title}</p>
-      <div className="mt-4 space-y-2">
-        <div className="h-3 w-4/5 rounded-full bg-gray-200" />
-        <div className="h-3 w-full rounded-full bg-gray-200" />
-        <div className="h-3 w-2/3 rounded-full bg-gray-200" />
+    <div className="rounded-habibiMd border border-gray-200 bg-gray-50 p-4">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-xs font-semibold uppercase text-gray-500">{title}</p>
+        <div className="h-2 w-12 rounded-full bg-gray-200" />
+      </div>
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <div className={["rounded-habibiMd bg-white p-3", compact ? "sm:col-span-2" : ""].join(" ")}>
+          <div className="h-3 w-3/5 rounded-full bg-gray-300" />
+          <div className="mt-3 space-y-2">
+            <div className="h-2.5 rounded-full bg-gray-200" />
+            <div className="h-2.5 w-4/5 rounded-full bg-gray-200" />
+          </div>
+        </div>
+        {!compact ? (
+          <div className="rounded-habibiMd bg-white p-3">
+            <div className="h-3 w-1/2 rounded-full bg-gray-300" />
+            <div className="mt-3 space-y-2">
+              <div className="h-2.5 rounded-full bg-gray-200" />
+              <div className="h-2.5 w-2/3 rounded-full bg-gray-200" />
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -2887,24 +2939,30 @@ function WireframeBlock({ title }: { title: string }) {
 
 function MiniWireframeScreen({ title, tone }: { title: string; tone: Tone }) {
   return (
-    <div className="min-h-36 rounded-habibiMd border border-gray-200 bg-white p-3">
-      <div className={["mb-3 h-12 rounded-habibiMd", iconBg(tone)].join(" ")} />
-      <p className="text-xs font-semibold text-gray-700">{title}</p>
+    <div className="min-h-32 rounded-habibiMd border border-gray-200 bg-white p-3">
+      <div className="flex items-center justify-between gap-2">
+        <div className={["h-9 w-9 rounded-habibiMd", iconBg(tone)].join(" ")} />
+        <StatusDot tone={tone} />
+      </div>
+      <p className="mt-4 text-xs font-semibold text-gray-900">{title}</p>
       <div className="mt-3 space-y-2">
         <div className="h-2 rounded-full bg-gray-200" />
-        <div className="h-2 w-3/4 rounded-full bg-gray-200" />
+        <div className="h-2 w-2/3 rounded-full bg-gray-200" />
       </div>
     </div>
   );
 }
 
-function MiniWireframePanel({ label }: { label: string }) {
+function MiniWireframePanel({ label, tone = "neutral" }: { label: string; tone?: Tone }) {
   return (
     <div className="rounded-habibiMd border border-gray-200 bg-gray-50 p-3">
-      <p className="text-xs font-semibold text-gray-500">{label}</p>
-      <div className="mt-3 space-y-2">
-        <div className="h-2 rounded-full bg-gray-200" />
-        <div className="h-2 w-2/3 rounded-full bg-gray-200" />
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-xs font-semibold text-gray-700">{label}</p>
+        <StatusDot tone={tone} />
+      </div>
+      <div className="mt-3 rounded-habibiSm bg-white p-3">
+        <div className="h-2.5 rounded-full bg-gray-200" />
+        <div className="mt-2 h-2.5 w-3/4 rounded-full bg-gray-200" />
       </div>
     </div>
   );
